@@ -1,0 +1,16 @@
+{
+  "editor.formatOnSave": true,
+  "[rust]": {
+    "editor.formatOnSave": true,
+  },
+  "cSpell.words": [
+    "clippy",
+    "dotenv",
+    "reqwest"
+  ],
+  "rust-analyzer.diagnostics.disabled": [
+    "unresolved-proc-macro",
+    "macro-error"
+  ],
+  "debug.allowBreakpointsEverywhere": true
+}
