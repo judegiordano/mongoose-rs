@@ -883,9 +883,12 @@ name = "rust-mongo"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "async_once",
  "lazy_static",
  "mongodb",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",

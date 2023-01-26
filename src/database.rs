@@ -1,6 +1,9 @@
+use anyhow::Result;
 use async_once::AsyncOnce;
+use async_trait::async_trait;
 use lazy_static::lazy_static;
-use mongodb::{options::ClientOptions, Client, Database};
+use mongodb::{options::ClientOptions, Client, Collection, Database};
+use serde::Serialize;
 
 lazy_static! {
     pub static ref POOL: AsyncOnce<Database> = AsyncOnce::new(async {
@@ -32,4 +35,16 @@ lazy_static! {
         tracing::info!("connected to {:?}", default_database.name());
         default_database
     });
+}
+
+#[async_trait]
+pub trait Model: Serialize + Sized + Send {
+    fn collection_name<'a>() -> &'a str;
+    async fn collection() -> Collection<Self> {
+        POOL.get().await.collection::<Self>(Self::collection_name())
+    }
+    async fn save(&self) -> Result<&Self> {
+        Self::collection().await.insert_one(self, None).await?;
+        Ok(self)
+    }
 }

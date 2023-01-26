@@ -8,7 +8,7 @@ use crate::database::POOL;
 #[tokio::main]
 async fn main() -> Result<()> {
     logger::init()?;
-    let pool = POOL.get().await;
+    let _ = POOL.get().await;
     println!("Hello, world!");
     Ok(())
 }
