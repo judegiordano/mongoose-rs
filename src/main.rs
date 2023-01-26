@@ -4,17 +4,13 @@ pub mod database;
 pub mod logger;
 pub mod models;
 
-use crate::{database::POOL, models::user::User};
+use crate::{database::Model, models::user::User};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     logger::init()?;
-    let _ = POOL.get().await;
-    let new_user = User {
-        username: "hmmm".to_string(),
-        ..Default::default()
-    };
-    tracing::info!("{:?}", new_user);
-    println!("Hello, world!");
+    let result = User::read_by_id("ITMUJQPDJEIRBMXQLKBU", None).await;
+    // let result = User::list(None, None).await;
+    tracing::info!("{:?}", result);
     Ok(())
 }
