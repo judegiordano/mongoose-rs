@@ -674,6 +674,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nanoid"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ffa00dec017b5b1a8b7cf5e2c008bfda1aa7e0697ac1508b491fdf2622fb4d8"
+dependencies = [
+ "rand",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -885,8 +894,11 @@ dependencies = [
  "anyhow",
  "async-trait",
  "async_once",
+ "bson",
+ "chrono",
  "lazy_static",
  "mongodb",
+ "nanoid",
  "serde",
  "serde_json",
  "tokio",
