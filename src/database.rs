@@ -5,7 +5,9 @@ use bson::{doc, Document};
 use futures::StreamExt;
 use lazy_static::lazy_static;
 use mongodb::{
+    error::Error as MongoError,
     options::{ClientOptions, FindOneOptions, FindOptions},
+    results::UpdateResult,
     Client, Collection, Database,
 };
 use serde::{de::DeserializeOwned, Serialize};
@@ -142,6 +144,40 @@ pub trait Model: Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + De
             }
         }
         list_result
+    }
+
+    fn build_updates(updates: &Document) -> Document {
+        let mut document_updates = Document::new();
+        let mut set_updates = Document::new();
+        for key in updates.keys() {
+            let val = updates.get(key);
+            if val.is_none() {
+                continue;
+            }
+            if key.starts_with('$') {
+                document_updates.insert(key, val);
+                continue;
+            }
+            set_updates.insert(key, val);
+        }
+        // update timestamp
+        set_updates.insert("updated_at", chrono::Utc::now());
+        document_updates.insert("$set", set_updates);
+        document_updates
+    }
+
+    async fn update_one(filter: Document, updates: Document) -> Result<UpdateResult, MongoError> {
+        Self::collection()
+            .await
+            .update_one(filter, Self::build_updates(&updates), None)
+            .await
+    }
+
+    async fn update_many(filter: Document, updates: Document) -> Result<UpdateResult, MongoError> {
+        Self::collection()
+            .await
+            .update_many(filter, Self::build_updates(&updates), None)
+            .await
     }
 }
 

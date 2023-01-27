@@ -11,6 +11,7 @@ pub struct User {
     #[serde(rename = "_id")]
     pub id: String,
     pub username: String,
+    pub age: u32,
     #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,
     #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
@@ -23,6 +24,7 @@ impl Default for User {
         Self {
             id: Self::generate_id(),
             username: String::new(),
+            age: u32::default(),
             created_at: now,
             updated_at: now,
         }
