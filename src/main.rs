@@ -6,16 +6,15 @@ pub mod models;
 
 use crate::{database::Model, models::user::User};
 
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     logger::init()?;
-    let user = User {
-        username: "new_user".to_string(),
-        age: 26,
-        ..Default::default()
-    }
-    .save()
-    .await?;
-    tracing::info!("{:#?}", user);
+    let now = std::time::Instant::now();
+    let users = User::list(None, None).await;
+    tracing::info!("{:#?}", users);
+    tracing::info!("complete in {:#?}", now.elapsed());
     Ok(())
 }

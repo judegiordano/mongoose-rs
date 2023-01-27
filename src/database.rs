@@ -56,22 +56,29 @@ pub trait Model:
         nanoid!(20, &alphabet)
     }
     fn normalize_updates(updates: &Document) -> Document {
-        let mut document_updates = Document::new();
-        let mut set_updates = Document::new();
-        for key in updates.keys() {
-            let val = updates.get(key);
-            if val.is_none() {
-                continue;
-            }
-            if key.starts_with('$') {
-                document_updates.insert(key, val);
-                continue;
-            }
-            set_updates.insert(key, val);
-        }
+        let (mut set_updates, mut document_updates) =
+            updates
+                .keys()
+                .fold((Document::new(), Document::new()), |mut acc, key| {
+                    let val = updates.get(key);
+                    if val.is_none() || key == "$set" {
+                        // $set is built internally, so skip it
+                        return acc;
+                    }
+                    if key.starts_with('$') {
+                        // indicates something like $inc / $push / $pull
+                        acc.1.insert(key, val);
+                    } else {
+                        // all other document field updates contained in $set
+                        acc.0.insert(key, val);
+                    }
+                    return acc;
+                });
         // update timestamp
         set_updates.insert("updated_at", chrono::Utc::now());
         document_updates.insert("$set", set_updates);
+        // overall document now looks something like:
+        // { $set: { "updated_at": Date, ... }, "$inc": { ... }, "$push": { ... } }
         document_updates
     }
 
