@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::database::Model;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct User {
     #[serde(rename = "_id")]
     pub id: String,

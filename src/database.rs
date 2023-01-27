@@ -6,8 +6,10 @@ use futures::StreamExt;
 use lazy_static::lazy_static;
 use mongodb::{
     error::Error as MongoError,
-    options::{ClientOptions, FindOneOptions, FindOptions},
-    results::UpdateResult,
+    options::{
+        ClientOptions, FindOneAndUpdateOptions, FindOneOptions, FindOptions, ReturnDocument,
+    },
+    results::{DeleteResult, InsertManyResult, UpdateResult},
     Client, Collection, Database,
 };
 use serde::{de::DeserializeOwned, Serialize};
@@ -28,13 +30,21 @@ pub struct ListQueryOptions {
 }
 
 #[async_trait]
-pub trait Model: Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + Default {
+pub trait Model:
+    Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + Default + Clone
+{
     fn collection_name<'a>() -> &'a str;
     async fn create_indexes(db: &Database);
-    async fn collection() -> Collection<Self> {
-        POOL.get().await.collection::<Self>(Self::collection_name())
+    async fn client<'a>() -> &'a Client {
+        let client = &POOL.get().await.1;
+        client
     }
-
+    async fn collection() -> Collection<Self> {
+        POOL.get()
+            .await
+            .0
+            .collection::<Self>(Self::collection_name())
+    }
     fn generate_id() -> String {
         use nanoid::nanoid;
         // ~2 million years needed, in order to have a 1% probability of at least one collision.
@@ -45,10 +55,33 @@ pub trait Model: Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + De
         ];
         nanoid!(20, &alphabet)
     }
+    fn normalize_updates(updates: &Document) -> Document {
+        let mut document_updates = Document::new();
+        let mut set_updates = Document::new();
+        for key in updates.keys() {
+            let val = updates.get(key);
+            if val.is_none() {
+                continue;
+            }
+            if key.starts_with('$') {
+                document_updates.insert(key, val);
+                continue;
+            }
+            set_updates.insert(key, val);
+        }
+        // update timestamp
+        set_updates.insert("updated_at", chrono::Utc::now());
+        document_updates.insert("$set", set_updates);
+        document_updates
+    }
 
-    async fn save(&self) -> Result<&Self> {
+    async fn save(&self) -> Result<Self> {
         Self::collection().await.insert_one(self, None).await?;
-        Ok(self)
+        Ok(self.clone())
+    }
+
+    async fn bulk_insert(docs: Vec<Self>) -> Result<InsertManyResult> {
+        Ok(Self::collection().await.insert_many(docs, None).await?)
     }
 
     async fn read(filter: Document, options: Option<ReadQueryOptions>) -> Option<Self> {
@@ -146,43 +179,75 @@ pub trait Model: Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + De
         list_result
     }
 
-    fn build_updates(updates: &Document) -> Document {
-        let mut document_updates = Document::new();
-        let mut set_updates = Document::new();
-        for key in updates.keys() {
-            let val = updates.get(key);
-            if val.is_none() {
-                continue;
+    async fn update(filter: Document, updates: Document) -> Result<Option<Self>, MongoError> {
+        Self::collection()
+            .await
+            .find_one_and_update(
+                filter,
+                Self::normalize_updates(&updates),
+                FindOneAndUpdateOptions::builder()
+                    .return_document(ReturnDocument::After)
+                    .build(),
+            )
+            .await
+    }
+
+    async fn bulk_update(filter: Document, updates: Document) -> Result<UpdateResult, MongoError> {
+        Self::collection()
+            .await
+            .update_many(filter, Self::normalize_updates(&updates), None)
+            .await
+    }
+
+    async fn delete(filter: Document) -> Option<Self> {
+        match Self::collection()
+            .await
+            .find_one_and_delete(filter, None)
+            .await
+        {
+            Ok(found) => found,
+            Err(err) => {
+                tracing::error!(
+                    "error deleting {:?} document: {:?}",
+                    Self::collection_name(),
+                    err
+                );
+                None
             }
-            if key.starts_with('$') {
-                document_updates.insert(key, val);
-                continue;
-            }
-            set_updates.insert(key, val);
         }
-        // update timestamp
-        set_updates.insert("updated_at", chrono::Utc::now());
-        document_updates.insert("$set", set_updates);
-        document_updates
     }
 
-    async fn update_one(filter: Document, updates: Document) -> Result<UpdateResult, MongoError> {
-        Self::collection()
-            .await
-            .update_one(filter, Self::build_updates(&updates), None)
-            .await
+    async fn bulk_delete(filter: Document) -> Option<DeleteResult> {
+        match Self::collection().await.delete_many(filter, None).await {
+            Ok(found) => Some(found),
+            Err(err) => {
+                tracing::error!(
+                    "error bulk deleting {:?} documents: {:?}",
+                    Self::collection_name(),
+                    err
+                );
+                None
+            }
+        }
     }
 
-    async fn update_many(filter: Document, updates: Document) -> Result<UpdateResult, MongoError> {
-        Self::collection()
-            .await
-            .update_many(filter, Self::build_updates(&updates), None)
-            .await
+    async fn count(filter: Option<Document>) -> u64 {
+        match Self::collection().await.count_documents(filter, None).await {
+            Ok(count) => count,
+            Err(err) => {
+                tracing::error!(
+                    "error counting {:?} documents: {:?}",
+                    Self::collection_name(),
+                    err
+                );
+                0
+            }
+        }
     }
 }
 
 lazy_static! {
-    pub static ref POOL: AsyncOnce<Database> = AsyncOnce::new(async {
+    pub static ref POOL: AsyncOnce<(Database, Client)> = AsyncOnce::new(async {
         let mongo_uri = std::env::var("MONGO_URI").map_or(
             "mongodb://localhost:27017/local-database".to_string(),
             |uri| uri,
@@ -213,6 +278,6 @@ lazy_static! {
             // migrate indexes on connection
             User::create_indexes(&default_database).await;
         }
-        default_database
+        (default_database, client)
     });
 }
