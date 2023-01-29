@@ -104,7 +104,7 @@ pub trait Model:
         Ok(self.clone())
     }
 
-    async fn bulk_insert(docs: Vec<Self>) -> Result<InsertManyResult> {
+    async fn bulk_insert(docs: &[Self]) -> Result<InsertManyResult> {
         Ok(Self::collection().await.insert_many(docs, None).await?)
     }
 
@@ -130,7 +130,7 @@ pub trait Model:
         }
     }
 
-    async fn read_by_id(id: &str, options: Option<ReadQueryOptions>) -> Option<Self> {
+    async fn read_by_id(id: String, options: Option<ReadQueryOptions>) -> Option<Self> {
         let opts = match options {
             Some(opts) => Some(
                 FindOneOptions::builder()

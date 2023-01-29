@@ -2,6 +2,13 @@
 name = "mongoose"
 version = "0.1.0"
 edition = "2021"
+authors = ["Jude Giordano"]
+repository = "https://github.com/judegiordano/mongoose-rs"
+homepage = "https://github.com/judegiordano/mongoose-rs"
+license = "MIT"
+readme = "README.md"
+documentation = "https://github.com/judegiordano/mongoose-rs"
+description = "Convience MongoDb Wrappers"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [profile.release]

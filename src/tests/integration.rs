@@ -17,7 +17,7 @@ mod tests {
     #[tokio::test]
     async fn bulk_insert() -> Result<()> {
         let users = (0..5).into_iter().map(|_| mock::user()).collect::<Vec<_>>();
-        let inserted = User::bulk_insert(users).await?;
+        let inserted = User::bulk_insert(&users).await?;
         assert!(inserted.inserted_ids.len() == 5);
         Ok(())
     }
@@ -25,7 +25,7 @@ mod tests {
     #[tokio::test]
     async fn list() -> Result<()> {
         let users = (0..5).into_iter().map(|_| mock::user()).collect::<Vec<_>>();
-        User::bulk_insert(users).await?;
+        User::bulk_insert(&users).await?;
         let users = User::list(None, None).await;
         assert_eq!(users.len() > 0, true);
         Ok(())
@@ -49,13 +49,13 @@ mod tests {
     async fn delete_one() -> Result<()> {
         let inserted = mock::user().save().await?;
         let id = inserted.id.clone();
-        let found = User::read_by_id(&id, None).await;
+        let found = User::read_by_id(id.clone(), None).await;
         assert!(found.is_some());
         // delete
         let deleted = User::delete(doc! { "_id": id }).await;
         assert!(deleted.is_some());
         // should not exist
-        let found = User::read_by_id(&inserted.id, None).await;
+        let found = User::read_by_id(inserted.id, None).await;
         assert!(found.is_none());
         Ok(())
     }
@@ -80,7 +80,7 @@ mod tests {
             .into_iter()
             .map(|_| mock::user())
             .collect::<Vec<_>>();
-        User::bulk_insert(users).await?;
+        User::bulk_insert(&users).await?;
         // delete any null address
         User::bulk_delete(doc! {
             "address.apt_number": None::<String>
@@ -103,7 +103,7 @@ mod tests {
             .into_iter()
             .map(|_| mock::user())
             .collect::<Vec<_>>();
-        User::bulk_insert(users).await?;
+        User::bulk_insert(&users).await?;
 
         let users = User::list(
             None,
