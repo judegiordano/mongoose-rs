@@ -4,7 +4,18 @@ use chrono::{DateTime, Utc};
 use mongodb::{options::IndexOptions, Database, IndexModel};
 use serde::{Deserialize, Serialize};
 
-use crate::database::Model;
+use mongoose::Model;
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Address {
+    pub address: u32,
+    pub street: String,
+    pub city: String,
+    pub state: String,
+    pub zip: String,
+    pub country: String,
+    pub apt_number: Option<String>,
+}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct User {
@@ -12,6 +23,7 @@ pub struct User {
     pub id: String,
     pub username: String,
     pub age: u32,
+    pub address: Address,
     #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,
     #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
@@ -24,6 +36,15 @@ impl Default for User {
         Self {
             id: Self::generate_id(),
             username: String::new(),
+            address: Address {
+                address: u32::default(),
+                street: String::new(),
+                city: String::new(),
+                state: String::new(),
+                zip: String::new(),
+                country: String::new(),
+                apt_number: None,
+            },
             age: u32::default(),
             created_at: now,
             updated_at: now,

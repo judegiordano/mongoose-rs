@@ -782,6 +782,7 @@ dependencies = [
  "mimalloc",
  "mongodb",
  "nanoid",
+ "rand",
  "rayon",
  "serde",
  "serde_json",

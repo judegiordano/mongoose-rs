@@ -1,7 +1,6 @@
 use anyhow::Result;
 use async_once::AsyncOnce;
 use async_trait::async_trait;
-use bson::{doc, Document};
 use futures::StreamExt;
 use lazy_static::lazy_static;
 use mongodb::{
@@ -14,7 +13,8 @@ use mongodb::{
 };
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::models::user::User;
+// expose bson
+pub use bson::{doc, Document};
 
 #[derive(Serialize, Default)]
 pub struct ReadQueryOptions {
@@ -36,10 +36,9 @@ pub trait Model:
     fn collection_name<'a>() -> &'a str;
     async fn create_indexes(db: &Database);
     async fn client<'a>() -> &'a Client {
-        let client = &POOL.get().await.1;
-        client
+        &POOL.get().await.1
     }
-    async fn collection() -> Collection<Self> {
+    async fn collection<'a>() -> Collection<Self> {
         POOL.get()
             .await
             .0
@@ -72,7 +71,7 @@ pub trait Model:
                         // all other document field updates contained in $set
                         acc.0.insert(key, val);
                     }
-                    return acc;
+                    acc
                 });
         // update timestamp
         set_updates.insert("updated_at", chrono::Utc::now());
@@ -253,38 +252,36 @@ pub trait Model:
     }
 }
 
+pub async fn connect() -> (Database, Client) {
+    let mongo_uri = std::env::var("MONGO_URI").map_or(
+        "mongodb://localhost:27017/mongoose-rs-local".to_string(),
+        |uri| uri,
+    );
+    let client_options = ClientOptions::parse(mongo_uri).await.map_or_else(
+        |err| {
+            tracing::error!("error parsing client options {:?}", err);
+            std::process::exit(1);
+        },
+        |opts| opts,
+    );
+    let client = Client::with_options(client_options).map_or_else(
+        |err| {
+            tracing::error!("error connecting client: {:?}", err);
+            std::process::exit(1);
+        },
+        |client| client,
+    );
+    let default_database = client.default_database().map_or_else(
+        || {
+            tracing::error!("no default database found");
+            std::process::exit(1);
+        },
+        |db| db,
+    );
+    tracing::info!("connected to {:?}", default_database.name());
+    (default_database, client)
+}
+
 lazy_static! {
-    pub static ref POOL: AsyncOnce<(Database, Client)> = AsyncOnce::new(async {
-        let mongo_uri = std::env::var("MONGO_URI").map_or(
-            "mongodb://localhost:27017/local-database".to_string(),
-            |uri| uri,
-        );
-        let client_options = ClientOptions::parse(mongo_uri).await.map_or_else(
-            |err| {
-                tracing::error!("error parsing client options {:?}", err);
-                std::process::exit(1);
-            },
-            |opts| opts,
-        );
-        let client = Client::with_options(client_options).map_or_else(
-            |err| {
-                tracing::error!("error connecting client: {:?}", err);
-                std::process::exit(1);
-            },
-            |client| client,
-        );
-        let default_database = client.default_database().map_or_else(
-            || {
-                tracing::error!("no default database found");
-                std::process::exit(1);
-            },
-            |db| db,
-        );
-        tracing::info!("connected to {:?}", default_database.name());
-        {
-            // migrate indexes on connection
-            User::create_indexes(&default_database).await;
-        }
-        (default_database, client)
-    });
+    pub static ref POOL: AsyncOnce<(Database, Client)> = AsyncOnce::new(async { connect().await });
 }
