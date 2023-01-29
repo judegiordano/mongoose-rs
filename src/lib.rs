@@ -35,10 +35,27 @@ pub trait Model:
 {
     fn collection_name<'a>() -> &'a str;
     async fn create_indexes(db: &Database);
-    async fn client<'a>() -> &'a Client {
-        &POOL.get().await.1
+    /// ### In practice, we'd likely want to use a global static pool
+    /// ---
+    /// ```rs
+    ///
+    ///  lazy_static! {
+    ///    pub static ref POOL: AsyncOnce<(Database, Client)> = AsyncOnce::new(async { connect().await });
+    ///  }
+    /// //
+    ///  async fn client() -> Client {
+    ///    POOL.get().await.1
+    ///  }
+    ///  async fn collection() -> Collection<Self> {
+    ///    POOL.get()
+    ///    .await.0
+    ///    .collection::<Self>(Self::collection_name())
+    ///  }
+    /// ```
+    async fn client() -> Client {
+        POOL.get().await.1.to_owned()
     }
-    async fn collection<'a>() -> Collection<Self> {
+    async fn collection() -> Collection<Self> {
         POOL.get()
             .await
             .0

@@ -1,3 +1,5 @@
+use self::user_model::{Address, User};
+
 pub mod user_model;
 
 pub fn nanoid() -> String {
@@ -16,4 +18,22 @@ pub fn number() -> u32 {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     rng.gen_range(0..99999)
+}
+
+pub fn user() -> User {
+    let bool = number() % 2 == 0;
+    User {
+        username: format!("username_{}", nanoid()),
+        age: number(),
+        address: Address {
+            address: number(),
+            street: "Fake Street Name".to_string(),
+            city: "Fake City".to_string(),
+            state: "CA".to_string(),
+            zip: "F1256".to_string(),
+            country: "US".to_string(),
+            apt_number: if bool { Some("F35".to_string()) } else { None },
+        },
+        ..Default::default()
+    }
 }

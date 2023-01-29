@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use bson::doc;
 use chrono::{DateTime, Utc};
-use mongodb::{options::IndexOptions, Database, IndexModel};
+use mongodb::{options::IndexOptions, Client, Collection, Database, IndexModel};
 use serde::{Deserialize, Serialize};
 
-use mongoose::Model;
+use mongoose::{connect, Model};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Address {
@@ -57,6 +57,19 @@ impl Model for User {
     fn collection_name<'a>() -> &'a str {
         "users"
     }
+    async fn client() -> Client {
+        let (_, client) = connect().await;
+        client
+    }
+    async fn collection() -> Collection<Self> {
+        let (database, _) = connect().await;
+        {
+            // migrate indexes
+            User::create_indexes(&database).await;
+        }
+        database.collection(Self::collection_name())
+    }
+
     async fn create_indexes(db: &Database) {
         let username_index = IndexModel::builder()
             .keys(doc! { "username": 1 })
