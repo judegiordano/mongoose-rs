@@ -1,0 +1,40 @@
+name: Publish Main
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.66.0
+          profile: minimal
+          override: true
+          components: clippy
+
+      - name: start MongoDB
+        uses: supercharge/mongodb-github-action@1.8.0
+        with:
+          mongodb-version: 6
+          mongodb-replica-set: rs0
+
+      - name: add clippy
+        run: rustup component add clippy
+
+      - name: clippy lint
+        run: cargo lint
+
+      - name: cargo test
+        run: cargo test -- --test-threads=1 --show-output
