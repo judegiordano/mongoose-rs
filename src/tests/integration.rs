@@ -33,42 +33,92 @@ mod tests {
 
     #[tokio::test]
     async fn increment() -> Result<()> {
-        let users = User::list(
-            None,
-            Some(ListQueryOptions {
-                limit: Some(1),
-                sort: Some(doc! { "created_at": -1 }),
-                ..Default::default()
-            }),
-        )
-        .await;
-        let user = users.first();
-        assert_eq!(user.is_some(), true);
-        let user = user.unwrap();
-        let id = &user.id;
-        let current_address = &user.address.address;
+        let user = mock::user().save().await?;
         let updated = User::update(
-            doc! { "_id": id },
+            doc! { "_id": &user.id },
             doc! {
                 "$inc": { "address.address": 1 }
             },
         )
         .await?;
-        assert!(&updated.unwrap().address.address > &current_address);
+        assert!(&updated.unwrap().address.address > &user.address.address);
         Ok(())
     }
 
     #[tokio::test]
     async fn delete_one() -> Result<()> {
         let inserted = mock::user().save().await?;
-        let found = User::read_by_id(&inserted.id, None).await;
+        let id = inserted.id.clone();
+        let found = User::read_by_id(&id, None).await;
         assert!(found.is_some());
         // delete
-        let deleted = User::delete(doc! { "_id": &inserted.id }).await;
+        let deleted = User::delete(doc! { "_id": id }).await;
         assert!(deleted.is_some());
-        // should be deleted
+        // should not exist
         let found = User::read_by_id(&inserted.id, None).await;
         assert!(found.is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn decrement() -> Result<()> {
+        let user = mock::user().save().await?;
+        let updated = User::update(
+            doc! { "_id": &user.id },
+            doc! {
+                "$inc": { "age": -1 }
+            },
+        )
+        .await?;
+        assert!(&updated.unwrap().age < &user.age);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn bulk_delete() -> Result<()> {
+        let users = (0..100)
+            .into_iter()
+            .map(|_| mock::user())
+            .collect::<Vec<_>>();
+        User::bulk_insert(users).await?;
+        // delete any null address
+        User::bulk_delete(doc! {
+            "address.apt_number": None::<String>
+        })
+        .await;
+        let null_addresses = User::list(
+            Some(doc! {
+                "address.apt_number": None::<String>
+            }),
+            None,
+        )
+        .await;
+        assert!(null_addresses.len() == 0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn pagination() -> Result<()> {
+        let users = (0..100)
+            .into_iter()
+            .map(|_| mock::user())
+            .collect::<Vec<_>>();
+        User::bulk_insert(users).await?;
+
+        let users = User::list(
+            None,
+            Some(ListQueryOptions {
+                limit: Some(10),
+                skip: Some(0),
+                sort: Some(doc! { "age": 1 }),
+                ..Default::default()
+            }),
+        )
+        .await;
+        assert!(users.len() == 10);
+        for slice in users.windows(2) {
+            assert!(slice[0].age <= slice[1].age);
+        }
         Ok(())
     }
 }

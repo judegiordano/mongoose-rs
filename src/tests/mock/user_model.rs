@@ -65,7 +65,7 @@ impl Model for User {
         let (database, _) = connect().await;
         {
             // migrate indexes
-            User::create_indexes(&database).await;
+            Self::create_indexes(&database).await;
         }
         database.collection(Self::collection_name())
     }

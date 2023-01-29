@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use anyhow::Result;
 use async_once::AsyncOnce;
 use async_trait::async_trait;
@@ -11,27 +13,26 @@ use mongodb::{
     results::{DeleteResult, InsertManyResult, UpdateResult},
     Client, Collection, Database,
 };
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 // expose bson
 pub use bson::{doc, Document};
 
-#[derive(Serialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 pub struct ReadQueryOptions {
     pub projection: Option<Document>,
 }
 
-#[derive(Serialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 pub struct ListQueryOptions {
     pub limit: Option<i64>,
     pub skip: Option<u64>,
     pub sort: Option<Document>,
-    pub projection: Option<Document>,
 }
 
 #[async_trait]
 pub trait Model:
-    Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + Default + Clone
+    Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + Default + Clone + Debug
 {
     fn collection_name<'a>() -> &'a str;
     async fn create_indexes(db: &Database);
@@ -53,7 +54,7 @@ pub trait Model:
     ///  }
     /// ```
     async fn client() -> Client {
-        POOL.get().await.1.to_owned()
+        POOL.get().await.1.clone()
     }
     async fn collection() -> Collection<Self> {
         POOL.get()
@@ -168,7 +169,7 @@ pub trait Model:
                         .skip(opts.skip)
                         .limit(limit)
                         .sort(opts.sort)
-                        .projection(opts.projection)
+                        .projection(None)
                         .build(),
                 )
             }
@@ -222,13 +223,9 @@ pub trait Model:
             .await
     }
 
-    async fn delete(filter: Document) -> Option<Self> {
-        match Self::collection()
-            .await
-            .find_one_and_delete(filter, None)
-            .await
-        {
-            Ok(found) => found,
+    async fn delete(filter: Document) -> Option<DeleteResult> {
+        match Self::collection().await.delete_one(filter, None).await {
+            Ok(found) => Some(found),
             Err(err) => {
                 tracing::error!(
                     "error deleting {:?} document: {:?}",
