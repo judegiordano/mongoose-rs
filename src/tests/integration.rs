@@ -57,4 +57,18 @@ mod tests {
         assert!(&updated.unwrap().address.address > &current_address);
         Ok(())
     }
+
+    #[tokio::test]
+    async fn delete_one() -> Result<()> {
+        let inserted = mock::user().save().await?;
+        let found = User::read_by_id(&inserted.id, None).await;
+        assert!(found.is_some());
+        // delete
+        let deleted = User::delete(doc! { "_id": &inserted.id }).await;
+        assert!(deleted.is_some());
+        // should be deleted
+        let found = User::read_by_id(&inserted.id, None).await;
+        assert!(found.is_none());
+        Ok(())
+    }
 }
