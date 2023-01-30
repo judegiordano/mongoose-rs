@@ -9,6 +9,7 @@ license = "MIT"
 readme = "README.md"
 documentation = "https://github.com/judegiordano/mongoose-rs"
 description = "Convience MongoDb Wrappers"
+publish = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [profile.release]
