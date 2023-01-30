@@ -25,6 +25,7 @@ pub fn user() -> User {
     User {
         username: format!("username_{}", nanoid()),
         age: number(),
+        example_array: (0..=2).map(|_| number()).collect::<Vec<_>>(),
         address: Address {
             address: number(),
             street: "Fake Street Name".to_string(),

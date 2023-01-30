@@ -24,6 +24,7 @@ pub struct User {
     pub username: String,
     pub age: u32,
     pub address: Address,
+    pub example_array: Vec<u32>,
     #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,
     #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
@@ -36,6 +37,7 @@ impl Default for User {
         Self {
             id: Self::generate_id(),
             username: String::new(),
+            example_array: Vec::new(),
             address: Address {
                 address: u32::default(),
                 street: String::new(),

@@ -7,9 +7,7 @@ use futures::StreamExt;
 use lazy_static::lazy_static;
 use mongodb::{
     error::Error as MongoError,
-    options::{
-        ClientOptions, FindOneAndUpdateOptions, FindOneOptions, FindOptions, ReturnDocument,
-    },
+    options::{ClientOptions, FindOneAndUpdateOptions, FindOptions, ReturnDocument},
     results::{DeleteResult, InsertManyResult, UpdateResult},
     Client, Collection, Database,
 };
@@ -18,6 +16,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 // expose bson
 pub use bson::{doc, Document};
 
+/// This is still under development
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct ReadQueryOptions {
     pub projection: Option<Document>,
@@ -108,16 +107,8 @@ pub trait Model:
         Ok(Self::collection().await.insert_many(docs, None).await?)
     }
 
-    async fn read(filter: Document, options: Option<ReadQueryOptions>) -> Option<Self> {
-        let opts = match options {
-            Some(opts) => Some(
-                FindOneOptions::builder()
-                    .projection(opts.projection)
-                    .build(),
-            ),
-            None => None,
-        };
-        match Self::collection().await.find_one(filter, opts).await {
+    async fn read(filter: Document) -> Option<Self> {
+        match Self::collection().await.find_one(filter, None).await {
             Ok(result) => result,
             Err(err) => {
                 tracing::error!(
@@ -130,18 +121,10 @@ pub trait Model:
         }
     }
 
-    async fn read_by_id(id: String, options: Option<ReadQueryOptions>) -> Option<Self> {
-        let opts = match options {
-            Some(opts) => Some(
-                FindOneOptions::builder()
-                    .projection(opts.projection)
-                    .build(),
-            ),
-            None => None,
-        };
+    async fn read_by_id(id: String) -> Option<Self> {
         match Self::collection()
             .await
-            .find_one(doc! { "_id": id }, opts)
+            .find_one(doc! { "_id": id }, None)
             .await
         {
             Ok(result) => result,
