@@ -114,7 +114,7 @@ pub trait Model:
                 tracing::error!(
                     "error reading {:?} document: {:?}",
                     Self::collection_name(),
-                    err
+                    err.to_string()
                 );
                 None
             }
@@ -132,7 +132,7 @@ pub trait Model:
                 tracing::error!(
                     "error reading {:?} document: {:?}",
                     Self::collection_name(),
-                    err
+                    err.to_string()
                 );
                 None
             }
@@ -164,7 +164,7 @@ pub trait Model:
                 tracing::error!(
                     "error listing {:?} documents: {:?}",
                     Self::collection_name(),
-                    err
+                    err.to_string()
                 );
                 return Vec::new();
             }
@@ -177,7 +177,7 @@ pub trait Model:
                     tracing::error!(
                         "error iterating {:?} cursor: {:?}",
                         Self::collection_name(),
-                        err
+                        err.to_string()
                     );
                     continue;
                 }
@@ -213,7 +213,7 @@ pub trait Model:
                 tracing::error!(
                     "error deleting {:?} document: {:?}",
                     Self::collection_name(),
-                    err
+                    err.to_string()
                 );
                 None
             }
@@ -227,7 +227,7 @@ pub trait Model:
                 tracing::error!(
                     "error bulk deleting {:?} documents: {:?}",
                     Self::collection_name(),
-                    err
+                    err.to_string()
                 );
                 None
             }
@@ -241,11 +241,52 @@ pub trait Model:
                 tracing::error!(
                     "error counting {:?} documents: {:?}",
                     Self::collection_name(),
-                    err
+                    err.to_string()
                 );
                 0
             }
         }
+    }
+
+    async fn aggregate(pipeline: &[Document]) -> Vec<Self> {
+        let pipeline = pipeline.to_owned();
+        // let mut results = Self::collection().await.aggregate(pipeline, None).await?;
+        let mut result_cursor = match Self::collection().await.aggregate(pipeline, None).await {
+            Ok(cursor) => cursor,
+            Err(err) => {
+                tracing::error!(
+                    "error creating {:?} aggregate cursor: {:?}",
+                    Self::collection_name(),
+                    err.to_string()
+                );
+                return Vec::new();
+            }
+        };
+        let mut aggregate_docs = vec![];
+        while let Some(cursor) = result_cursor.next().await {
+            match cursor {
+                Ok(document) => {
+                    let document = bson::from_document(document);
+                    if let Ok(bson) = document {
+                        aggregate_docs.push(bson)
+                    } else if let Err(err) = document {
+                        tracing::error!(
+                            "error converting {:?} bson in aggregation: {:?}",
+                            Self::collection_name(),
+                            err.to_string()
+                        );
+                    }
+                }
+                Err(err) => {
+                    tracing::error!(
+                        "error iterating {:?} aggregate cursor: {:?}",
+                        Self::collection_name(),
+                        err.to_string()
+                    );
+                }
+            }
+        }
+        aggregate_docs
     }
 }
 

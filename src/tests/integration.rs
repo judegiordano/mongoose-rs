@@ -217,4 +217,29 @@ mod tests {
         assert!(updated.address.city == new_city);
         Ok(())
     }
+
+    #[tokio::test]
+    async fn count() -> Result<()> {
+        let user = mock::user().save().await?;
+        let count = User::count(Some(doc! { "username": user.username })).await;
+        assert!(count == 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn match_aggregate() -> Result<()> {
+        let user = mock::user().save().await?;
+        let results = User::aggregate(&[
+            doc! {
+                "$match": { "username": &user.username }
+            },
+            doc! {
+                "$limit": 1
+            },
+        ])
+        .await;
+        assert!(results[0].username == user.username);
+        assert!(results.len() == 1);
+        Ok(())
+    }
 }
