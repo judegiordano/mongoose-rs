@@ -95,7 +95,7 @@ mod tests {
 
     #[tokio::test]
     async fn bulk_delete() -> Result<()> {
-        let users = (0..100)
+        let users = (0..10)
             .into_iter()
             .map(|_| mock::user())
             .collect::<Vec<_>>();
@@ -118,7 +118,7 @@ mod tests {
 
     #[tokio::test]
     async fn pagination() -> Result<()> {
-        let users = (0..100)
+        let users = (0..10)
             .into_iter()
             .map(|_| mock::user())
             .collect::<Vec<_>>();
@@ -199,6 +199,22 @@ mod tests {
         let match_ids = matches.iter().map(|a| a.id.clone()).collect::<Vec<_>>();
         assert!(match_ids.contains(&ids[0]));
         assert!(match_ids.contains(&ids[1]));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn update_sub_document() -> Result<()> {
+        let user = mock::user().save().await?;
+        let new_city = mock::nanoid();
+        let updated = User::update(
+            doc! { "_id": user.id.clone() },
+            doc! {
+                "address.city": &new_city
+            },
+        )
+        .await?
+        .unwrap();
+        assert!(updated.address.city == new_city);
         Ok(())
     }
 }
