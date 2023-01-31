@@ -11,6 +11,7 @@ use mongodb::{
     results::{DeleteResult, InsertManyResult, UpdateResult},
     Client, Collection, Database,
 };
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 // expose bson
@@ -43,9 +44,12 @@ pub struct LookupStage {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum PipelineStage {
     Match(Document),
+    Limit(i64),
+    Sort(Document),
     Lookup(LookupStage),
     Unwind(String),
     Project(Document),
+    AddFields(Document),
 }
 
 #[async_trait]
@@ -92,7 +96,7 @@ pub trait Model:
     }
     fn _create_pipeline(pipeline: &[PipelineStage]) -> Vec<Document> {
         pipeline
-            .iter()
+            .par_iter()
             .map(|stage| match stage {
                 PipelineStage::Match(doc) => doc! { "$match": doc },
                 PipelineStage::Lookup(doc) => doc! {
@@ -106,9 +110,12 @@ pub trait Model:
                 PipelineStage::Project(doc) => doc! { "$project": doc },
                 PipelineStage::Unwind(path) => doc! {
                     "$unwind": doc! {
-                        "path": format!("${}", path)
+                        "path": path
                     }
                 },
+                PipelineStage::AddFields(doc) => doc! { "$addFields": doc },
+                PipelineStage::Limit(limit) => doc! { "$limit": limit },
+                PipelineStage::Sort(doc) => doc! { "$sort": doc },
             })
             .collect::<Vec<_>>()
     }
@@ -139,9 +146,9 @@ pub trait Model:
         document_updates
     }
 
-    async fn save(&self) -> Result<Self> {
+    async fn save<'a>(&'a self) -> Result<&'a Self> {
         Self::collection().await.insert_one(self, None).await?;
-        Ok(self.clone())
+        Ok(self)
     }
 
     async fn bulk_insert(docs: &[Self]) -> Result<InsertManyResult> {
@@ -162,7 +169,7 @@ pub trait Model:
         }
     }
 
-    async fn read_by_id(id: String) -> Option<Self> {
+    async fn read_by_id(id: &str) -> Option<Self> {
         match Self::collection()
             .await
             .find_one(doc! { "_id": id }, None)
@@ -305,18 +312,16 @@ pub trait Model:
         let mut aggregate_docs = vec![];
         while let Some(cursor) = result_cursor.next().await {
             match cursor {
-                Ok(document) => {
-                    let document = bson::from_document::<T>(document);
-                    if let Ok(bson) = document {
-                        aggregate_docs.push(bson)
-                    } else if let Err(err) = document {
+                Ok(document) => match bson::from_document::<T>(document) {
+                    Ok(data) => aggregate_docs.push(data),
+                    Err(err) => {
                         tracing::error!(
                             "error converting {:?} bson in aggregation: {:?}",
                             Self::collection_name(),
                             err.to_string()
                         );
                     }
-                }
+                },
                 Err(err) => {
                     tracing::error!(
                         "error iterating {:?} aggregate cursor: {:?}",

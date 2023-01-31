@@ -20,7 +20,7 @@ mod tests {
 
     #[tokio::test]
     async fn read() -> Result<()> {
-        let new_user = mock::user().save().await?;
+        let new_user = mock::user().save().await?.to_owned();
         let user = User::read(doc! { "username": &new_user.username })
             .await
             .unwrap();
@@ -30,8 +30,8 @@ mod tests {
 
     #[tokio::test]
     async fn read_by_id() -> Result<()> {
-        let new_user = mock::user().save().await?;
-        let user = User::read_by_id(new_user.id.clone()).await.unwrap();
+        let new_user = mock::user().save().await?.to_owned();
+        let user = User::read_by_id(&new_user.id).await.unwrap();
         assert_eq!(user.username.clone(), new_user.username.clone());
         assert_eq!(user.id.clone(), new_user.id.clone());
         Ok(())
@@ -56,7 +56,7 @@ mod tests {
 
     #[tokio::test]
     async fn increment() -> Result<()> {
-        let user = mock::user().save().await?;
+        let user = mock::user().save().await?.to_owned();
         let updated = User::update(
             doc! { "_id": &user.id },
             doc! {
@@ -70,22 +70,21 @@ mod tests {
 
     #[tokio::test]
     async fn delete_one() -> Result<()> {
-        let inserted = mock::user().save().await?;
-        let id = inserted.id.clone();
-        let found = User::read_by_id(id.clone()).await;
+        let inserted = mock::user().save().await?.to_owned();
+        let found = User::read_by_id(&inserted.id).await;
         assert!(found.is_some());
         // delete
-        let deleted = User::delete(doc! { "_id": id }).await;
+        let deleted = User::delete(doc! { "_id": &inserted.id }).await;
         assert!(deleted.is_some());
         // should not exist
-        let found = User::read_by_id(inserted.id).await;
+        let found = User::read_by_id(&inserted.id).await;
         assert!(found.is_none());
         Ok(())
     }
 
     #[tokio::test]
     async fn decrement() -> Result<()> {
-        let user = mock::user().save().await?;
+        let user = mock::user().save().await?.to_owned();
         let updated = User::update(
             doc! { "_id": &user.id },
             doc! {
@@ -147,7 +146,7 @@ mod tests {
 
     #[tokio::test]
     async fn push() -> Result<()> {
-        let user = mock::user().save().await?;
+        let user = mock::user().save().await?.to_owned();
         assert!(user.example_array.len() == 3);
         let updated = User::update(
             doc! { "_id": user.id },
@@ -163,7 +162,7 @@ mod tests {
 
     #[tokio::test]
     async fn pull() -> Result<()> {
-        let user = mock::user().save().await?;
+        let user = mock::user().save().await?.to_owned();
         assert!(user.example_array.len() == 3);
         let updated = User::update(
             doc! { "_id": user.id },
@@ -208,10 +207,10 @@ mod tests {
 
     #[tokio::test]
     async fn update_sub_document() -> Result<()> {
-        let user = mock::user().save().await?;
+        let user = mock::user().save().await?.to_owned();
         let new_city = mock::nanoid();
         let updated = User::update(
-            doc! { "_id": user.id.clone() },
+            doc! { "_id": user.id },
             doc! {
                 "address.city": &new_city
             },
@@ -224,7 +223,7 @@ mod tests {
 
     #[tokio::test]
     async fn count() -> Result<()> {
-        let user = mock::user().save().await?;
+        let user = mock::user().save().await?.to_owned();
         let count = User::count(Some(doc! { "username": user.username })).await;
         assert!(count == 1);
         Ok(())
@@ -232,11 +231,15 @@ mod tests {
 
     #[tokio::test]
     async fn match_aggregate() -> Result<()> {
-        let user = mock::user().save().await?;
-        let post = mock::post(user.id.clone()).save().await?;
+        let user = mock::user().save().await?.to_owned();
+        let posts = (0..10)
+            .into_iter()
+            .map(|_| mock::post(user.id.clone()))
+            .collect::<Vec<_>>();
+        Post::bulk_insert(&posts).await?;
         let results = Post::aggregate::<PopulatedPost>(&[
             PipelineStage::Match(doc! {
-                "_id": &post.id
+                "user": user.id.clone()
             }),
             PipelineStage::Lookup(LookupStage {
                 from: "users".to_string(),
@@ -244,12 +247,54 @@ mod tests {
                 local_field: "user".to_string(),
                 as_field: "user".to_string(),
             }),
-            PipelineStage::Unwind("user".to_string()),
+            PipelineStage::Unwind("$user".to_string()),
         ])
         .await;
-        assert!(results[0].content == post.content);
-        assert!(results[0].id == post.id);
-        assert!(results[0].user.id == user.id);
+        assert!(results.len() >= 1);
+        results
+            .iter()
+            .for_each(|post| assert!(post.user.id == user.id));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn aggregate_arbitrary() -> Result<()> {
+        let user = mock::user().save().await?.to_owned();
+        Post::bulk_insert(
+            &(0..10)
+                .into_iter()
+                .map(|_| mock::post(user.id.clone()))
+                .collect::<Vec<_>>(),
+        )
+        .await?;
+        // create aggregate
+        // this should demonstrate all supported
+        // aggregation features into a generic Value
+        let results = Post::aggregate::<serde_json::Value>(&[
+            PipelineStage::Match(doc! { "user": user.id }),
+            PipelineStage::Limit(2),
+            PipelineStage::Lookup(LookupStage {
+                from: "users".to_string(),
+                foreign_field: "_id".to_string(),
+                local_field: "user".to_string(),
+                as_field: "user".to_string(),
+            }),
+            PipelineStage::Unwind("$user".to_string()),
+            PipelineStage::Project(doc! {
+                "content": 1,
+                "created_at": 1,
+                "user._id": 1,
+                "user.username": 1,
+                "user.example_array": 1,
+            }),
+            PipelineStage::AddFields(doc! {
+                "array_sum": doc! { "$sum": "$user.example_array" },
+                "post_date": "$created_at",
+            }),
+            PipelineStage::Sort(doc! { "post_date": -1 }),
+        ])
+        .await;
+        assert!(results.len() == 2);
         Ok(())
     }
 }
