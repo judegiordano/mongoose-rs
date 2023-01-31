@@ -1,5 +1,9 @@
-use self::user_model::{Address, User};
+use self::{
+    post_model::Post,
+    user_model::{Address, User},
+};
 
+pub mod post_model;
 pub mod user_model;
 
 pub fn nanoid() -> String {
@@ -35,6 +39,14 @@ pub fn user() -> User {
             country: "US".to_string(),
             apt_number: if bool { Some("F35".to_string()) } else { None },
         },
+        ..Default::default()
+    }
+}
+
+pub fn post(user_id: String) -> Post {
+    Post {
+        user: user_id,
+        content: format!("here's my post: {}", nanoid()),
         ..Default::default()
     }
 }

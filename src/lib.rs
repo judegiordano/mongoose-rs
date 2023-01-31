@@ -29,6 +29,25 @@ pub struct ListQueryOptions {
     pub sort: Option<Document>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct LookupStage {
+    pub from: String,
+    #[serde(rename = "localField")]
+    pub local_field: String,
+    #[serde(rename = "foreignField")]
+    pub foreign_field: String,
+    #[serde(rename = "as")]
+    pub as_field: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum PipelineStage {
+    Match(Document),
+    Lookup(LookupStage),
+    Unwind(String),
+    Project(Document),
+}
+
 #[async_trait]
 pub trait Model:
     Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + Default + Clone + Debug
@@ -71,7 +90,29 @@ pub trait Model:
         ];
         nanoid!(20, &alphabet)
     }
-    fn normalize_updates(updates: &Document) -> Document {
+    fn _create_pipeline(pipeline: &[PipelineStage]) -> Vec<Document> {
+        pipeline
+            .iter()
+            .map(|stage| match stage {
+                PipelineStage::Match(doc) => doc! { "$match": doc },
+                PipelineStage::Lookup(doc) => doc! {
+                    "$lookup": doc! {
+                        "from": doc.from.to_string(),
+                        "localField": doc.local_field.to_string(),
+                        "foreignField": doc.foreign_field.to_string(),
+                        "as": doc.as_field.to_string()
+                    }
+                },
+                PipelineStage::Project(doc) => doc! { "$project": doc },
+                PipelineStage::Unwind(path) => doc! {
+                    "$unwind": doc! {
+                        "path": format!("${}", path)
+                    }
+                },
+            })
+            .collect::<Vec<_>>()
+    }
+    fn _normalize_updates(updates: &Document) -> Document {
         let (mut set_updates, mut document_updates) =
             updates
                 .keys()
@@ -191,7 +232,7 @@ pub trait Model:
             .await
             .find_one_and_update(
                 filter,
-                Self::normalize_updates(&updates),
+                Self::_normalize_updates(&updates),
                 FindOneAndUpdateOptions::builder()
                     .return_document(ReturnDocument::After)
                     .build(),
@@ -202,7 +243,7 @@ pub trait Model:
     async fn bulk_update(filter: Document, updates: Document) -> Result<UpdateResult, MongoError> {
         Self::collection()
             .await
-            .update_many(filter, Self::normalize_updates(&updates), None)
+            .update_many(filter, Self::_normalize_updates(&updates), None)
             .await
     }
 
@@ -248,9 +289,8 @@ pub trait Model:
         }
     }
 
-    async fn aggregate(pipeline: &[Document]) -> Vec<Self> {
-        let pipeline = pipeline.to_owned();
-        // let mut results = Self::collection().await.aggregate(pipeline, None).await?;
+    async fn aggregate<T: DeserializeOwned + Send>(pipeline: &[PipelineStage]) -> Vec<T> {
+        let pipeline = Self::_create_pipeline(pipeline);
         let mut result_cursor = match Self::collection().await.aggregate(pipeline, None).await {
             Ok(cursor) => cursor,
             Err(err) => {
@@ -266,7 +306,7 @@ pub trait Model:
         while let Some(cursor) = result_cursor.next().await {
             match cursor {
                 Ok(document) => {
-                    let document = bson::from_document(document);
+                    let document = bson::from_document::<T>(document);
                     if let Ok(bson) = document {
                         aggregate_docs.push(bson)
                     } else if let Err(err) = document {

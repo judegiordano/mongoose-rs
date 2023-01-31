@@ -2,8 +2,12 @@
 mod tests {
     use anyhow::Result;
 
-    use crate::tests::mock::{self, user_model::User};
-    use mongoose::{doc, ListQueryOptions, Model};
+    use crate::tests::mock::{
+        self,
+        post_model::{PopulatedPost, Post},
+        user_model::User,
+    };
+    use mongoose::{doc, ListQueryOptions, LookupStage, Model, PipelineStage};
 
     #[tokio::test]
     async fn create_one() -> Result<()> {
@@ -229,17 +233,23 @@ mod tests {
     #[tokio::test]
     async fn match_aggregate() -> Result<()> {
         let user = mock::user().save().await?;
-        let results = User::aggregate(&[
-            doc! {
-                "$match": { "username": &user.username }
-            },
-            doc! {
-                "$limit": 1
-            },
+        let post = mock::post(user.id.clone()).save().await?;
+        let results = Post::aggregate::<PopulatedPost>(&[
+            PipelineStage::Match(doc! {
+                "_id": &post.id
+            }),
+            PipelineStage::Lookup(LookupStage {
+                from: "users".to_string(),
+                foreign_field: "_id".to_string(),
+                local_field: "user".to_string(),
+                as_field: "user".to_string(),
+            }),
+            PipelineStage::Unwind("user".to_string()),
         ])
         .await;
-        assert!(results[0].username == user.username);
-        assert!(results.len() == 1);
+        assert!(results[0].content == post.content);
+        assert!(results[0].id == post.id);
+        assert!(results[0].user.id == user.id);
         Ok(())
     }
 }
