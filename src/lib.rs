@@ -1,5 +1,6 @@
 use anyhow::Result;
 use futures::StreamExt;
+use mimalloc::MiMalloc;
 use mongodb::{
     options::{FindOneAndUpdateOptions, FindOptions, ReturnDocument},
     results::{DeleteResult, InsertManyResult, UpdateResult},
@@ -19,6 +20,9 @@ pub mod types;
 
 use connection::POOL;
 use types::{ListOptions, PipelineStage};
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 #[async_trait]
 pub trait Model:
