@@ -1,63 +1,30 @@
-use std::fmt::Debug;
-
 use anyhow::Result;
-use async_once::AsyncOnce;
-use async_trait::async_trait;
 use futures::StreamExt;
-use lazy_static::lazy_static;
 use mongodb::{
-    error::Error as MongoError,
-    options::{ClientOptions, FindOneAndUpdateOptions, FindOptions, ReturnDocument},
+    options::{FindOneAndUpdateOptions, FindOptions, ReturnDocument},
     results::{DeleteResult, InsertManyResult, UpdateResult},
     Client, Collection, Database,
 };
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
+use std::fmt::Debug;
 
-// expose bson
+// expose crates
+pub use async_trait::async_trait;
 pub use bson::{doc, Document};
+pub use chrono;
+pub use mongodb;
+pub mod connection;
+pub mod types;
 
-/// This is still under development
-#[derive(Serialize, Deserialize, Default, Debug)]
-pub struct ReadQueryOptions {
-    pub projection: Option<Document>,
-}
-
-#[derive(Serialize, Deserialize, Default, Debug)]
-pub struct ListQueryOptions {
-    pub limit: Option<i64>,
-    pub skip: Option<u64>,
-    pub sort: Option<Document>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct LookupStage {
-    pub from: String,
-    #[serde(rename = "localField")]
-    pub local_field: String,
-    #[serde(rename = "foreignField")]
-    pub foreign_field: String,
-    #[serde(rename = "as")]
-    pub as_field: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum PipelineStage {
-    Match(Document),
-    Limit(i64),
-    Sort(Document),
-    Lookup(LookupStage),
-    Unwind(String),
-    Project(Document),
-    AddFields(Document),
-}
+use connection::POOL;
+use types::{ListQueryOptions, PipelineStage};
 
 #[async_trait]
 pub trait Model:
     Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + Default + Clone + Debug
 {
     fn collection_name<'a>() -> &'a str;
-    async fn create_indexes(db: &Database);
     /// ### In practice, we'd likely want to use a global static pool
     /// ---
     /// ```rs
@@ -84,6 +51,7 @@ pub trait Model:
             .0
             .collection::<Self>(Self::collection_name())
     }
+    async fn create_indexes(_: &Database) {}
     fn generate_id() -> String {
         use nanoid::nanoid;
         // ~2 million years needed, in order to have a 1% probability of at least one collision.
@@ -94,7 +62,7 @@ pub trait Model:
         ];
         nanoid!(20, &alphabet)
     }
-    fn _create_pipeline(pipeline: &[PipelineStage]) -> Vec<Document> {
+    fn create_pipeline(pipeline: &[PipelineStage]) -> Vec<Document> {
         pipeline
             .par_iter()
             .map(|stage| match stage {
@@ -119,7 +87,7 @@ pub trait Model:
             })
             .collect::<Vec<_>>()
     }
-    fn _normalize_updates(updates: &Document) -> Document {
+    fn normalize_updates(updates: &Document) -> Document {
         let (mut set_updates, mut document_updates) =
             updates
                 .keys()
@@ -146,6 +114,7 @@ pub trait Model:
         document_updates
     }
 
+    // client api methods
     async fn save<'a>(&'a self) -> Result<&'a Self> {
         Self::collection().await.insert_one(self, None).await?;
         Ok(self)
@@ -234,24 +203,24 @@ pub trait Model:
         list_result
     }
 
-    async fn update(filter: Document, updates: Document) -> Result<Option<Self>, MongoError> {
-        Self::collection()
+    async fn update(filter: Document, updates: Document) -> Result<Option<Self>> {
+        Ok(Self::collection()
             .await
             .find_one_and_update(
                 filter,
-                Self::_normalize_updates(&updates),
+                Self::normalize_updates(&updates),
                 FindOneAndUpdateOptions::builder()
                     .return_document(ReturnDocument::After)
                     .build(),
             )
-            .await
+            .await?)
     }
 
-    async fn bulk_update(filter: Document, updates: Document) -> Result<UpdateResult, MongoError> {
-        Self::collection()
+    async fn bulk_update(filter: Document, updates: Document) -> Result<UpdateResult> {
+        Ok(Self::collection()
             .await
-            .update_many(filter, Self::_normalize_updates(&updates), None)
-            .await
+            .update_many(filter, Self::normalize_updates(&updates), None)
+            .await?)
     }
 
     async fn delete(filter: Document) -> Option<DeleteResult> {
@@ -297,7 +266,7 @@ pub trait Model:
     }
 
     async fn aggregate<T: DeserializeOwned + Send>(pipeline: &[PipelineStage]) -> Vec<T> {
-        let pipeline = Self::_create_pipeline(pipeline);
+        let pipeline = Self::create_pipeline(pipeline);
         let mut result_cursor = match Self::collection().await.aggregate(pipeline, None).await {
             Ok(cursor) => cursor,
             Err(err) => {
@@ -333,38 +302,4 @@ pub trait Model:
         }
         aggregate_docs
     }
-}
-
-pub async fn connect() -> (Database, Client) {
-    let mongo_uri = std::env::var("MONGO_URI").map_or(
-        "mongodb://localhost:27017/mongoose-rs-local".to_string(),
-        |uri| uri,
-    );
-    let client_options = ClientOptions::parse(mongo_uri).await.map_or_else(
-        |err| {
-            tracing::error!("error parsing client options {:?}", err);
-            std::process::exit(1);
-        },
-        |opts| opts,
-    );
-    let client = Client::with_options(client_options).map_or_else(
-        |err| {
-            tracing::error!("error connecting client: {:?}", err);
-            std::process::exit(1);
-        },
-        |client| client,
-    );
-    let default_database = client.default_database().map_or_else(
-        || {
-            tracing::error!("no default database found");
-            std::process::exit(1);
-        },
-        |db| db,
-    );
-    tracing::info!("connected to {:?}", default_database.name());
-    (default_database, client)
-}
-
-lazy_static! {
-    pub static ref POOL: AsyncOnce<(Database, Client)> = AsyncOnce::new(async { connect().await });
 }

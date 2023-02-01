@@ -1,10 +1,13 @@
-use async_trait::async_trait;
-use bson::doc;
-use chrono::{DateTime, Utc};
-use mongodb::{Client, Collection, Database};
 use serde::{Deserialize, Serialize};
 
-use mongoose::{connect, Model};
+use mongoose::{
+    async_trait,
+    chrono::{DateTime, Utc},
+    connection::connect,
+    doc,
+    mongodb::{Client, Collection},
+    Model,
+};
 
 use super::user_model::User;
 
@@ -62,6 +65,4 @@ impl Model for Post {
         }
         database.collection(Self::collection_name())
     }
-
-    async fn create_indexes(_: &Database) {}
 }

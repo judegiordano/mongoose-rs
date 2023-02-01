@@ -1,10 +1,9 @@
+pub mod post_model;
+pub mod user_model;
 use self::{
     post_model::Post,
     user_model::{Address, User},
 };
-
-pub mod post_model;
-pub mod user_model;
 
 pub fn nanoid() -> String {
     use nanoid::nanoid;

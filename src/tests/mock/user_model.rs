@@ -1,10 +1,13 @@
-use async_trait::async_trait;
-use bson::doc;
-use chrono::{DateTime, Utc};
-use mongodb::{options::IndexOptions, Client, Collection, Database, IndexModel};
 use serde::{Deserialize, Serialize};
 
-use mongoose::{connect, Model};
+use mongoose::{
+    async_trait,
+    chrono::{DateTime, Utc},
+    connection::connect,
+    doc,
+    mongodb::{options::IndexOptions, Client, Collection, Database, IndexModel},
+    Model,
+};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Address {
