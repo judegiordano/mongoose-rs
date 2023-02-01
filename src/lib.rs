@@ -18,7 +18,7 @@ pub mod connection;
 pub mod types;
 
 use connection::POOL;
-use types::{ListQueryOptions, PipelineStage};
+use types::{ListOptions, PipelineStage};
 
 #[async_trait]
 pub trait Model:
@@ -156,7 +156,7 @@ pub trait Model:
         }
     }
 
-    async fn list(filter: Option<Document>, options: Option<ListQueryOptions>) -> Vec<Self> {
+    async fn list(filter: Option<Document>, options: Option<ListOptions>) -> Vec<Self> {
         let opts = match options {
             Some(opts) => {
                 let limit = if opts.limit.is_some() {

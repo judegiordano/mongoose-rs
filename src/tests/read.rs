@@ -9,7 +9,7 @@ mod read_tests {
     };
     use mongoose::{
         doc,
-        types::{ListQueryOptions, LookupStage, PipelineStage},
+        types::{ListOptions, LookupStage, PipelineStage},
         Model,
     };
 
@@ -51,7 +51,7 @@ mod read_tests {
 
         let users = User::list(
             None,
-            Some(ListQueryOptions {
+            Some(ListOptions {
                 limit: Some(10),
                 skip: Some(0),
                 sort: Some(doc! { "age": 1 }),
@@ -73,7 +73,7 @@ mod read_tests {
 
         let users = User::list(
             None,
-            Some(ListQueryOptions {
+            Some(ListOptions {
                 limit: Some(2),
                 sort: Some(doc! { "created_at": -1 }),
                 ..Default::default()

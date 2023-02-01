@@ -4,12 +4,12 @@ use std::fmt::Debug;
 
 /// This is still under development
 #[derive(Serialize, Deserialize, Default, Debug)]
-pub struct ReadQueryOptions {
+pub struct ReadOptions {
     pub projection: Option<Document>,
 }
 
 #[derive(Serialize, Deserialize, Default, Debug)]
-pub struct ListQueryOptions {
+pub struct ListOptions {
     pub limit: Option<i64>,
     pub skip: Option<u64>,
     pub sort: Option<Document>,
