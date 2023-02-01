@@ -4,7 +4,7 @@ use mimalloc::MiMalloc;
 use mongodb::{
     options::{FindOneAndUpdateOptions, FindOptions, ReturnDocument},
     results::{DeleteResult, InsertManyResult, UpdateResult},
-    Client, Collection, Database,
+    Collection, Database,
 };
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{de::DeserializeOwned, Serialize};
@@ -29,42 +29,22 @@ pub trait Model:
     Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + Default + Clone + Debug
 {
     fn collection_name<'a>() -> &'a str;
-    /// ### In practice, we'd likely want to use a global static pool
-    /// ---
-    /// ```rs
-    ///
-    ///  lazy_static! {
-    ///    pub static ref POOL: AsyncOnce<(Database, Client)> = AsyncOnce::new(async { connect().await });
-    ///  }
-    /// //
-    ///  async fn client() -> Client {
-    ///    POOL.get().await.1
-    ///  }
-    ///  async fn collection() -> Collection<Self> {
-    ///    POOL.get()
-    ///    .await.0
-    ///    .collection::<Self>(Self::collection_name())
-    ///  }
-    /// ```
-    async fn client() -> Client {
-        POOL.get().await.1.clone()
-    }
     async fn collection() -> Collection<Self> {
-        POOL.get()
-            .await
-            .0
-            .collection::<Self>(Self::collection_name())
+        let conn = POOL.get().await;
+        conn.database.collection::<Self>(Self::collection_name())
     }
     async fn create_indexes(_: &Database) {}
     fn generate_id() -> String {
         use nanoid::nanoid;
         // ~2 million years needed, in order to have a 1% probability of at least one collision.
         // https://zelark.github.io/nano-id-cc/
-        let alphabet = [
-            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q',
-            'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-        ];
-        nanoid!(20, &alphabet)
+        nanoid!(
+            20,
+            &[
+                'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+                'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+            ]
+        )
     }
     fn create_pipeline(pipeline: &[PipelineStage]) -> Vec<Document> {
         pipeline

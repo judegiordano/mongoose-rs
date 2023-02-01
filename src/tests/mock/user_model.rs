@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 use mongoose::{
     async_trait,
     chrono::{DateTime, Utc},
-    connection::connect,
+    connection::{connect, Connection},
     doc,
-    mongodb::{options::IndexOptions, Client, Collection, Database, IndexModel},
+    mongodb::{options::IndexOptions, Collection, Database, IndexModel},
     Model,
 };
 
@@ -62,19 +62,14 @@ impl Model for User {
     fn collection_name<'a>() -> &'a str {
         "users"
     }
-    async fn client() -> Client {
-        let (_, client) = connect().await;
-        client
-    }
     async fn collection() -> Collection<Self> {
-        let (database, _) = connect().await;
+        let Connection { database, .. } = *connect().await;
         {
             // migrate indexes
             Self::create_indexes(&database).await;
         }
         database.collection(Self::collection_name())
     }
-
     async fn create_indexes(db: &Database) {
         let username_index = IndexModel::builder()
             .keys(doc! { "username": 1 })
