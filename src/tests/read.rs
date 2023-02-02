@@ -15,20 +15,18 @@ mod read_tests {
 
     #[tokio::test]
     async fn read() -> Result<()> {
-        let new_user = mock::user().save().await?.to_owned();
-        let user = User::read(doc! { "username": &new_user.username })
-            .await
-            .unwrap();
-        assert_eq!(user.username.clone(), new_user.username.clone());
+        let new_user = mock::user().save().await?;
+        let user = User::read(doc! { "username": &new_user.username }).await?;
+        assert_eq!(user.username, new_user.username);
         Ok(())
     }
 
     #[tokio::test]
     async fn read_by_id() -> Result<()> {
-        let new_user = mock::user().save().await?.to_owned();
-        let user = User::read_by_id(&new_user.id).await.unwrap();
-        assert_eq!(user.username.clone(), new_user.username.clone());
-        assert_eq!(user.id.clone(), new_user.id.clone());
+        let new_user = mock::user().save().await?;
+        let user = User::read_by_id(&new_user.id).await?;
+        assert_eq!(user.username, new_user.username);
+        assert_eq!(user.id, new_user.id);
         Ok(())
     }
 
@@ -36,7 +34,7 @@ mod read_tests {
     async fn list() -> Result<()> {
         let users = (0..5).into_iter().map(|_| mock::user()).collect::<Vec<_>>();
         User::bulk_insert(&users).await?;
-        let users = User::list(None, None).await;
+        let users = User::list(None, None).await?;
         assert_eq!(users.len() > 0, true);
         Ok(())
     }
@@ -58,7 +56,7 @@ mod read_tests {
                 ..Default::default()
             }),
         )
-        .await;
+        .await?;
         assert!(users.len() == 10);
         for slice in users.windows(2) {
             assert!(slice[0].age <= slice[1].age);
@@ -79,17 +77,17 @@ mod read_tests {
                 ..Default::default()
             }),
         )
-        .await;
-        let ids = users.iter().map(|a| a.id.clone()).collect::<Vec<_>>();
+        .await?;
+        let ids = users.iter().map(|a| a.id.to_string()).collect::<Vec<_>>();
         let matches = User::list(
             Some(doc! {
                 "_id": { "$in": &ids }
             }),
             None,
         )
-        .await;
+        .await?;
         assert!(matches.len() == 2);
-        let match_ids = matches.iter().map(|a| a.id.clone()).collect::<Vec<_>>();
+        let match_ids = matches.iter().map(|a| a.id.to_string()).collect::<Vec<_>>();
         assert!(match_ids.contains(&ids[0]));
         assert!(match_ids.contains(&ids[1]));
         Ok(())
@@ -97,23 +95,23 @@ mod read_tests {
 
     #[tokio::test]
     async fn count() -> Result<()> {
-        let user = mock::user().save().await?.to_owned();
-        let count = User::count(Some(doc! { "username": user.username })).await;
+        let user = mock::user().save().await?;
+        let count = User::count(Some(doc! { "username": user.username })).await?;
         assert!(count == 1);
         Ok(())
     }
 
     #[tokio::test]
     async fn match_aggregate() -> Result<()> {
-        let user = mock::user().save().await?.to_owned();
+        let user = mock::user().save().await?;
         let posts = (0..10)
             .into_iter()
-            .map(|_| mock::post(user.id.clone()))
+            .map(|_| mock::post(user.id.to_string()))
             .collect::<Vec<_>>();
         Post::bulk_insert(&posts).await?;
         let results = Post::aggregate::<PopulatedPost>(&[
             PipelineStage::Match(doc! {
-                "user": user.id.clone()
+                "user": user.id.to_string()
             }),
             PipelineStage::Lookup(LookupStage {
                 from: "users".to_string(),
@@ -123,7 +121,7 @@ mod read_tests {
             }),
             PipelineStage::Unwind("$user".to_string()),
         ])
-        .await;
+        .await?;
         assert!(results.len() >= 1);
         results
             .iter()
@@ -133,11 +131,11 @@ mod read_tests {
 
     #[tokio::test]
     async fn aggregate_arbitrary() -> Result<()> {
-        let user = mock::user().save().await?.to_owned();
+        let user = mock::user().save().await?;
         Post::bulk_insert(
             &(0..10)
                 .into_iter()
-                .map(|_| mock::post(user.id.clone()))
+                .map(|_| mock::post(user.id.to_string()))
                 .collect::<Vec<_>>(),
         )
         .await?;
@@ -167,7 +165,7 @@ mod read_tests {
             }),
             PipelineStage::Sort(doc! { "post_date": -1 }),
         ])
-        .await;
+        .await?;
         assert!(results.len() == 2);
         Ok(())
     }

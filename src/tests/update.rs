@@ -7,7 +7,7 @@ mod update_tests {
 
     #[tokio::test]
     async fn increment() -> Result<()> {
-        let user = mock::user().save().await?.to_owned();
+        let user = mock::user().save().await?;
         let updated = User::update(
             doc! { "_id": &user.id },
             doc! {
@@ -15,13 +15,13 @@ mod update_tests {
             },
         )
         .await?;
-        assert!(&updated.unwrap().address.address > &user.address.address);
+        assert!(&updated.address.address > &user.address.address);
         Ok(())
     }
 
     #[tokio::test]
     async fn decrement() -> Result<()> {
-        let user = mock::user().save().await?.to_owned();
+        let user = mock::user().save().await?;
         let updated = User::update(
             doc! { "_id": &user.id },
             doc! {
@@ -29,13 +29,13 @@ mod update_tests {
             },
         )
         .await?;
-        assert!(&updated.unwrap().age < &user.age);
+        assert!(&updated.age < &user.age);
         Ok(())
     }
 
     #[tokio::test]
     async fn push() -> Result<()> {
-        let user = mock::user().save().await?.to_owned();
+        let user = mock::user().save().await?;
         assert!(user.example_array.len() == 3);
         let updated = User::update(
             doc! { "_id": user.id },
@@ -43,15 +43,14 @@ mod update_tests {
                 "$push": { "example_array": 1234 }
             },
         )
-        .await?
-        .unwrap();
+        .await?;
         assert!(updated.example_array.len() == 4);
         Ok(())
     }
 
     #[tokio::test]
     async fn pull() -> Result<()> {
-        let user = mock::user().save().await?.to_owned();
+        let user = mock::user().save().await?;
         assert!(user.example_array.len() == 3);
         let updated = User::update(
             doc! { "_id": user.id },
@@ -59,15 +58,14 @@ mod update_tests {
                 "$pull": { "example_array": user.example_array[0] }
             },
         )
-        .await?
-        .unwrap();
+        .await?;
         assert!(updated.example_array.len() == 2);
         Ok(())
     }
 
     #[tokio::test]
     async fn update_sub_document() -> Result<()> {
-        let user = mock::user().save().await?.to_owned();
+        let user = mock::user().save().await?;
         let new_city = mock::nanoid();
         let updated = User::update(
             doc! { "_id": user.id },
@@ -75,8 +73,7 @@ mod update_tests {
                 "address.city": &new_city
             },
         )
-        .await?
-        .unwrap();
+        .await?;
         assert!(updated.address.city == new_city);
         Ok(())
     }

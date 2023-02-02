@@ -50,8 +50,8 @@ impl Default for Post {
 
 #[async_trait]
 impl Model for Post {
-    fn collection_name<'a>() -> &'a str {
-        "posts"
+    fn name() -> String {
+        "posts".to_string()
     }
     async fn collection() -> Collection<Self> {
         let Connection { database, .. } = *connect().await;
@@ -59,6 +59,6 @@ impl Model for Post {
             // migrate indexes
             Self::create_indexes(&database).await;
         }
-        database.collection(Self::collection_name())
+        database.collection(&Self::name())
     }
 }

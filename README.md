@@ -22,7 +22,7 @@ pub struct User {
 
 #[async_trait]
 impl Model for User {
-    fn collection_name<'a>() -> &'a str {
+    fn name() -> String {
         "users"
     }
     async fn create_indexes(db: &Database) {

@@ -7,15 +7,15 @@ mod delete_tests {
 
     #[tokio::test]
     async fn delete_one() -> Result<()> {
-        let inserted = mock::user().save().await?.to_owned();
-        let found = User::read_by_id(&inserted.id).await;
-        assert!(found.is_some());
+        let inserted = mock::user().save().await?;
+        let found = User::read_by_id(&inserted.id).await?;
+        assert_eq!(found.id, inserted.id);
         // delete
         let deleted = User::delete(doc! { "_id": &inserted.id }).await;
-        assert!(deleted.is_some());
+        assert!(deleted.is_ok());
         // should not exist
         let found = User::read_by_id(&inserted.id).await;
-        assert!(found.is_none());
+        assert!(found.is_err());
         Ok(())
     }
 
@@ -30,14 +30,14 @@ mod delete_tests {
         User::bulk_delete(doc! {
             "address.apt_number": None::<String>
         })
-        .await;
+        .await?;
         let null_addresses = User::list(
             Some(doc! {
                 "address.apt_number": None::<String>
             }),
             None,
         )
-        .await;
+        .await?;
         assert!(null_addresses.len() == 0);
         Ok(())
     }

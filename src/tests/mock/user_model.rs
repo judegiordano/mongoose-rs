@@ -59,8 +59,8 @@ impl Default for User {
 
 #[async_trait]
 impl Model for User {
-    fn collection_name<'a>() -> &'a str {
-        "users"
+    fn name() -> String {
+        "users".to_string()
     }
     async fn collection() -> Collection<Self> {
         let Connection { database, .. } = *connect().await;
@@ -68,7 +68,7 @@ impl Model for User {
             // migrate indexes
             Self::create_indexes(&database).await;
         }
-        database.collection(Self::collection_name())
+        database.collection(&Self::name())
     }
     async fn create_indexes(db: &Database) {
         let username_index = IndexModel::builder()
@@ -77,16 +77,12 @@ impl Model for User {
             .build();
         let indexes = [username_index];
         if let Err(err) = db
-            .collection::<Self>(Self::collection_name())
+            .collection::<Self>(&Self::name())
             .create_indexes(indexes, None)
             .await
         {
-            tracing::error!(
-                "error creating {:?} indexes: {:?}",
-                Self::collection_name(),
-                err
-            );
+            tracing::error!("error creating {:?} indexes: {:?}", Self::name(), err);
         }
-        tracing::debug!("indexes created for {:?}", Self::collection_name());
+        tracing::debug!("indexes created for {:?}", Self::name());
     }
 }

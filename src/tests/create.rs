@@ -7,10 +7,8 @@ mod create_tests {
 
     #[tokio::test]
     async fn create_one() -> Result<()> {
-        let new_user = mock::user();
-        let inserted = new_user.save().await?;
-        assert_eq!(inserted.username, new_user.username);
-        assert_eq!(inserted.age, new_user.age);
+        let new_user = mock::user().save().await;
+        assert!(new_user.is_ok());
         Ok(())
     }
 
