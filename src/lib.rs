@@ -30,8 +30,10 @@ pub trait Model:
 {
     fn collection_name<'a>() -> &'a str;
     async fn collection() -> Collection<Self> {
-        let conn = POOL.get().await;
-        conn.database.collection::<Self>(Self::collection_name())
+        POOL.get()
+            .await
+            .database
+            .collection::<Self>(Self::collection_name())
     }
     async fn create_indexes(_: &Database) {}
     fn generate_id() -> String {

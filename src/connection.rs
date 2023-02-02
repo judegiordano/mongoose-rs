@@ -30,15 +30,12 @@ pub async fn connect() -> Box<Connection> {
         },
         |client| client,
     );
-    let default_database = client.default_database().map_or_else(
+    let database = client.default_database().map_or_else(
         || {
             tracing::error!("no default database found");
             std::process::exit(1);
         },
         |db| db,
     );
-    Box::new(Connection {
-        database: default_database,
-        client,
-    })
+    Box::new(Connection { database, client })
 }
