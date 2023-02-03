@@ -40,24 +40,24 @@ pub enum PipelineStage {
 
 #[derive(Serialize, Deserialize, Debug, Error)]
 pub enum MongooseError {
-    #[error("no document found in {0:#?} collection")]
+    #[error("no {0} document found")]
     NotFound(String),
-    #[error("error inserting document in {0:#?} collection")]
+    #[error("error inserting {0} document")]
     Insert(String),
-    #[error("error bulk inserting documents in {0:#?} collection")]
+    #[error("error bulk inserting {0} documents")]
     BulkInsert(String),
-    #[error("error listing documents in {0:#?} collection")]
+    #[error("error listing {0} documents")]
     List(String),
-    #[error("error updating document in {0:#?} collection")]
+    #[error("error updating {0} document")]
     Update(String),
-    #[error("error bulk updating documents in {0:#?} collection")]
+    #[error("error bulk updating {0} documents")]
     BulkUpdate(String),
-    #[error("error deleting document in {0:#?} collection")]
+    #[error("error deleting {0} document")]
     Delete(String),
-    #[error("error bulk deleting documents in {0:#?} collection")]
+    #[error("error bulk deleting {0} documents")]
     BulkDelete(String),
-    #[error("error counting documents in {0:#?} collection")]
+    #[error("error counting {0} documents")]
     Count(String),
-    #[error("error aggregating documents in {0:#?} collection")]
+    #[error("error aggregating {0} documents")]
     Aggregate(String),
 }
