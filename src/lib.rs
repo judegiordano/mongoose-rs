@@ -13,7 +13,7 @@ use std::fmt::Debug;
 
 // expose crates
 pub use async_trait::async_trait;
-pub use bson::{doc, Document};
+pub use bson::{doc, serde_helpers::chrono_datetime_as_bson_datetime as Timestamp, Document};
 pub use chrono;
 pub use mongodb;
 pub mod connection;

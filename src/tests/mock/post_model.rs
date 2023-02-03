@@ -6,7 +6,7 @@ use mongoose::{
     connection::{connect, Connection},
     doc,
     mongodb::Collection,
-    Model,
+    Model, Timestamp,
 };
 
 use super::user_model::User;
@@ -17,9 +17,9 @@ pub struct Post {
     pub id: String,
     pub user: String,
     pub content: String,
-    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "Timestamp")]
     pub created_at: DateTime<Utc>,
-    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "Timestamp")]
     pub updated_at: DateTime<Utc>,
 }
 
@@ -29,9 +29,9 @@ pub struct PopulatedPost {
     pub id: String,
     pub user: User,
     pub content: String,
-    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "Timestamp")]
     pub created_at: DateTime<Utc>,
-    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "Timestamp")]
     pub updated_at: DateTime<Utc>,
 }
 

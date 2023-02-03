@@ -6,7 +6,7 @@ use mongoose::{
     connection::{connect, Connection},
     doc,
     mongodb::{options::IndexOptions, Collection, Database, IndexModel},
-    Model,
+    Model, Timestamp,
 };
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -28,9 +28,9 @@ pub struct User {
     pub age: u32,
     pub address: Address,
     pub example_array: Vec<u32>,
-    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "Timestamp")]
     pub created_at: DateTime<Utc>,
-    #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[serde(with = "Timestamp")]
     pub updated_at: DateTime<Utc>,
 }
 
