@@ -50,9 +50,6 @@ impl Default for Post {
 
 #[async_trait]
 impl Model for Post {
-    fn name() -> String {
-        "posts".to_string()
-    }
     async fn collection() -> Collection<Self> {
         let Connection { database, .. } = *connect().await;
         {

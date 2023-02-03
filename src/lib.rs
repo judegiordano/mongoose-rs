@@ -1,4 +1,5 @@
 use anyhow::Result;
+use convert_case::{Case, Casing};
 use futures::StreamExt;
 use mimalloc::MiMalloc;
 use mongodb::{
@@ -28,9 +29,21 @@ static GLOBAL: MiMalloc = MiMalloc;
 pub trait Model:
     Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + Default + Clone + Debug
 {
-    fn name() -> String;
     async fn collection() -> Collection<Self> {
         POOL.get().await.database.collection::<Self>(&Self::name())
+    }
+    fn name() -> String {
+        let name = std::any::type_name::<Self>();
+        name.split("::").last().map_or_else(
+            || name.to_string(),
+            |name| {
+                let mut normalized = name.to_case(Case::Snake);
+                if !normalized.ends_with('s') {
+                    normalized.push('s');
+                }
+                normalized
+            },
+        )
     }
     async fn create_indexes(_: &Database) {}
     fn generate_id() -> String {

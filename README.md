@@ -22,9 +22,6 @@ pub struct User {
 
 #[async_trait]
 impl Model for User {
-    fn name() -> String {
-        "users"
-    }
     async fn create_indexes(db: &Database) {
         let username_index = IndexModel::builder()
             .keys(doc! { "username": 1 })

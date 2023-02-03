@@ -59,9 +59,6 @@ impl Default for User {
 
 #[async_trait]
 impl Model for User {
-    fn name() -> String {
-        "users".to_string()
-    }
     async fn collection() -> Collection<Self> {
         let Connection { database, .. } = *connect().await;
         {
