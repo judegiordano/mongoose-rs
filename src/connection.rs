@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_once::AsyncOnce;
 use lazy_static::lazy_static;
 use mongodb::{options::ClientOptions, Client, Database};
@@ -8,10 +10,10 @@ pub struct Connection {
 }
 
 lazy_static! {
-    pub static ref POOL: AsyncOnce<Box<Connection>> = AsyncOnce::new(async { connect().await });
+    pub static ref POOL: AsyncOnce<Arc<Connection>> = AsyncOnce::new(async { connect().await });
 }
 
-pub async fn connect() -> Box<Connection> {
+pub async fn connect() -> Arc<Connection> {
     let mongo_uri = std::env::var("MONGO_URI").map_or(
         "mongodb://localhost:27017/mongoose-rs-local".to_string(),
         |uri| uri,
@@ -37,5 +39,5 @@ pub async fn connect() -> Box<Connection> {
         },
         |db| db,
     );
-    Box::new(Connection { database, client })
+    Arc::new(Connection { database, client })
 }

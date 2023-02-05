@@ -5,7 +5,7 @@ use mimalloc::MiMalloc;
 use mongodb::{
     options::{FindOneAndUpdateOptions, FindOptions, ReturnDocument},
     results::{DeleteResult, InsertManyResult, UpdateResult},
-    Collection, Database,
+    Client, Collection, Database,
 };
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{de::DeserializeOwned, Serialize};
@@ -29,6 +29,12 @@ static GLOBAL: MiMalloc = MiMalloc;
 pub trait Model:
     Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + Default + Clone + Debug
 {
+    async fn client() -> &'static Client {
+        &POOL.get().await.client
+    }
+    async fn database() -> &'static Database {
+        &POOL.get().await.database
+    }
     async fn collection() -> Collection<Self> {
         POOL.get().await.database.collection::<Self>(&Self::name())
     }
@@ -45,7 +51,7 @@ pub trait Model:
             },
         )
     }
-    async fn create_indexes(_: &Database) {}
+    async fn create_indexes() {}
     fn generate_id() -> String {
         use nanoid::nanoid;
         // ~2 million years needed, in order to have a 1% probability of at least one collision.

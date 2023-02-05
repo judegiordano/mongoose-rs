@@ -1,11 +1,13 @@
 #[cfg(test)]
 mod read_tests {
     use anyhow::Result;
+    use chrono::{DateTime, Utc};
+    use serde::{Deserialize, Serialize};
 
     use crate::tests::mock::{
         self,
         post_model::{PopulatedPost, Post},
-        user_model::User,
+        user_model::{Address, User},
     };
     use mongoose::{
         doc,
@@ -114,7 +116,7 @@ mod read_tests {
                 "user": user.id.to_string()
             }),
             PipelineStage::Lookup(LookupStage {
-                from: "users".to_string(),
+                from: User::name(),
                 foreign_field: "_id".to_string(),
                 local_field: "user".to_string(),
                 as_field: "user".to_string(),
@@ -146,7 +148,7 @@ mod read_tests {
             PipelineStage::Match(doc! { "user": user.id }),
             PipelineStage::Limit(2),
             PipelineStage::Lookup(LookupStage {
-                from: "users".to_string(),
+                from: User::name(),
                 foreign_field: "_id".to_string(),
                 local_field: "user".to_string(),
                 as_field: "user".to_string(),
@@ -167,6 +169,61 @@ mod read_tests {
         ])
         .await?;
         assert!(results.len() == 2);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn join_to_many() -> Result<()> {
+        use mongoose::Timestamp;
+        #[derive(Debug, Deserialize, Serialize, Clone)]
+        struct ShallowPost {
+            content: String,
+            #[serde(with = "Timestamp")]
+            created_at: DateTime<Utc>,
+        }
+        #[derive(Debug, Deserialize, Serialize, Clone)]
+        struct UserPosts {
+            #[serde(rename = "_id")]
+            id: String,
+            username: String,
+            age: u32,
+            address: Address,
+            example_array: Vec<u32>,
+            #[serde(with = "Timestamp")]
+            created_at: DateTime<Utc>,
+            #[serde(with = "Timestamp")]
+            updated_at: DateTime<Utc>,
+            posts: Vec<ShallowPost>,
+        }
+        let user = mock::user().save().await?;
+        Post::bulk_insert(
+            &(0..10)
+                .into_iter()
+                .map(|_| mock::post(user.id.to_string()))
+                .collect::<Vec<_>>(),
+        )
+        .await?;
+        // build aggregate -> populate many to one
+        let results = User::aggregate::<UserPosts>(&[
+            PipelineStage::Match(doc! { "_id": &user.id }),
+            PipelineStage::Lookup(LookupStage {
+                from: Post::name(),
+                foreign_field: "user".to_string(),
+                local_field: "_id".to_string(),
+                as_field: "posts".to_string(),
+            }),
+            PipelineStage::Project(doc! {
+                "posts": {
+                    "user": 0,
+                    "_id": 0,
+                    "updated_at": 0
+                }
+            }),
+        ])
+        .await?;
+        let populated_user = results.first().unwrap();
+        assert!(populated_user.id == user.id);
+        assert!(populated_user.posts.len() == 10);
         Ok(())
     }
 }

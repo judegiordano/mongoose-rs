@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 use mongoose::{
     async_trait,
     chrono::{DateTime, Utc},
-    connection::{connect, Connection},
+    connection::connect,
     doc,
-    mongodb::{options::IndexOptions, Collection, Database, IndexModel},
+    mongodb::{options::IndexOptions, Collection, IndexModel},
     Model, Timestamp,
 };
 
@@ -60,26 +60,22 @@ impl Default for User {
 #[async_trait]
 impl Model for User {
     async fn collection() -> Collection<Self> {
-        let Connection { database, .. } = *connect().await;
+        let database = &connect().await.database;
         {
             // migrate indexes
-            Self::create_indexes(&database).await;
+            let username_index = IndexModel::builder()
+                .keys(doc! { "username": 1 })
+                .options(IndexOptions::builder().unique(true).build())
+                .build();
+            let indexes = [username_index];
+            if let Err(err) = database
+                .collection::<Self>(&Self::name())
+                .create_indexes(indexes, None)
+                .await
+            {
+                tracing::error!("error creating {:?} indexes: {:?}", Self::name(), err);
+            }
         }
         database.collection(&Self::name())
-    }
-    async fn create_indexes(db: &Database) {
-        let username_index = IndexModel::builder()
-            .keys(doc! { "username": 1 })
-            .options(IndexOptions::builder().unique(true).build())
-            .build();
-        let indexes = [username_index];
-        if let Err(err) = db
-            .collection::<Self>(&Self::name())
-            .create_indexes(indexes, None)
-            .await
-        {
-            tracing::error!("error creating {:?} indexes: {:?}", Self::name(), err);
-        }
-        tracing::debug!("indexes created for {:?}", Self::name());
     }
 }

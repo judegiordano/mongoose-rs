@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 use mongoose::{
     async_trait,
     chrono::{DateTime, Utc},
-    connection::{connect, Connection},
+    connection::connect,
     doc,
-    mongodb::Collection,
+    mongodb::{Collection, IndexModel},
     Model, Timestamp,
 };
 
@@ -51,10 +51,19 @@ impl Default for Post {
 #[async_trait]
 impl Model for Post {
     async fn collection() -> Collection<Self> {
-        let Connection { database, .. } = *connect().await;
+        let database = &connect().await.database;
         {
             // migrate indexes
-            Self::create_indexes(&database).await;
+            let user_index = IndexModel::builder().keys(doc! { "user": 1 }).build();
+            let indexes = [user_index];
+            if let Err(err) = database
+                .collection::<Self>(&Self::name())
+                .create_indexes(indexes, None)
+                .await
+            {
+                tracing::error!("error creating {:?} indexes: {:?}", Self::name(), err);
+            }
+            tracing::debug!("indexes created for {:?}", Self::name());
         }
         database.collection(&Self::name())
     }
