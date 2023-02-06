@@ -1,8 +1,11 @@
-use std::sync::Arc;
-
 use async_once::AsyncOnce;
 use lazy_static::lazy_static;
+use mimalloc::MiMalloc;
 use mongodb::{options::ClientOptions, Client, Database};
+use std::sync::Arc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 pub struct Connection {
     pub database: Database,

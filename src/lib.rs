@@ -1,349 +1,587 @@
-use anyhow::Result;
-use convert_case::{Case, Casing};
-use futures::StreamExt;
-use mimalloc::MiMalloc;
-use mongodb::{
-    options::{FindOneAndUpdateOptions, FindOptions, ReturnDocument},
-    results::{DeleteResult, InsertManyResult, UpdateResult},
-    Client, Collection, Database,
-};
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Debug;
-
-// expose crates
+// expose 3rd party crates
 pub use async_trait::async_trait;
 pub use bson::{doc, serde_helpers::chrono_datetime_as_bson_datetime as Timestamp, Document};
 pub use chrono;
 pub use mongodb;
+// expose crates
 pub mod connection;
 pub mod types;
+// expose model
+mod model;
+pub use model::Model;
 
-use connection::POOL;
-use types::{ListOptions, MongooseError, PipelineStage};
+#[cfg(test)]
+mod mock {
+    use serde::{Deserialize, Serialize};
 
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
+    use crate::{
+        async_trait,
+        chrono::{DateTime, Utc},
+        connection::connect,
+        doc,
+        mongodb::{options::IndexOptions, Collection, IndexModel},
+        Model, Timestamp,
+    };
 
-#[async_trait]
-pub trait Model:
-    Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + Default + Clone + Debug
-{
-    async fn client() -> &'static Client {
-        &POOL.get().await.client
+    #[derive(Debug, Deserialize, Serialize, Clone)]
+    pub struct Address {
+        pub address: u32,
+        pub street: String,
+        pub city: String,
+        pub state: String,
+        pub zip: String,
+        pub country: String,
+        pub apt_number: Option<String>,
     }
-    async fn database() -> &'static Database {
-        &POOL.get().await.database
+
+    #[derive(Debug, Deserialize, Serialize, Clone)]
+    pub struct User {
+        #[serde(rename = "_id")]
+        pub id: String,
+        pub username: String,
+        pub age: u32,
+        pub address: Address,
+        pub example_array: Vec<u32>,
+        #[serde(with = "Timestamp")]
+        pub created_at: DateTime<Utc>,
+        #[serde(with = "Timestamp")]
+        pub updated_at: DateTime<Utc>,
     }
-    async fn collection() -> Collection<Self> {
-        POOL.get().await.database.collection::<Self>(&Self::name())
+
+    impl Default for User {
+        fn default() -> Self {
+            let now = chrono::Utc::now();
+            Self {
+                id: Self::generate_id(),
+                username: String::new(),
+                example_array: Vec::new(),
+                address: Address {
+                    address: u32::default(),
+                    street: String::new(),
+                    city: String::new(),
+                    state: String::new(),
+                    zip: String::new(),
+                    country: String::new(),
+                    apt_number: None,
+                },
+                age: u32::default(),
+                created_at: now,
+                updated_at: now,
+            }
+        }
     }
-    fn name() -> String {
-        let name = std::any::type_name::<Self>();
-        name.split("::").last().map_or_else(
-            || name.to_string(),
-            |name| {
-                let mut normalized = name.to_case(Case::Snake);
-                if !normalized.ends_with('s') {
-                    normalized.push('s');
+
+    #[async_trait]
+    impl Model for User {
+        async fn collection() -> Collection<Self> {
+            let database = &connect().await.database;
+            {
+                // migrate indexes
+                let username_index = IndexModel::builder()
+                    .keys(doc! { "username": 1 })
+                    .options(IndexOptions::builder().unique(true).build())
+                    .build();
+                let indexes = [username_index];
+                if let Err(err) = database
+                    .collection::<Self>(&Self::name())
+                    .create_indexes(indexes, None)
+                    .await
+                {
+                    tracing::error!("error creating {:?} indexes: {:?}", Self::name(), err);
                 }
-                normalized
-            },
-        )
+            }
+            database.collection(&Self::name())
+        }
     }
-    fn generate_id() -> String {
+
+    #[derive(Debug, Deserialize, Serialize, Clone)]
+    pub struct Post {
+        #[serde(rename = "_id")]
+        pub id: String,
+        pub user: String,
+        pub content: String,
+        #[serde(with = "Timestamp")]
+        pub created_at: DateTime<Utc>,
+        #[serde(with = "Timestamp")]
+        pub updated_at: DateTime<Utc>,
+    }
+
+    #[derive(Debug, Deserialize, Serialize, Clone)]
+    pub struct PopulatedPost {
+        #[serde(rename = "_id")]
+        pub id: String,
+        pub user: User,
+        pub content: String,
+        #[serde(with = "Timestamp")]
+        pub created_at: DateTime<Utc>,
+        #[serde(with = "Timestamp")]
+        pub updated_at: DateTime<Utc>,
+    }
+
+    impl Default for Post {
+        fn default() -> Self {
+            let now = chrono::Utc::now();
+            Self {
+                id: Self::generate_id(),
+                user: String::new(),
+                content: String::new(),
+                created_at: now,
+                updated_at: now,
+            }
+        }
+    }
+
+    #[async_trait]
+    impl Model for Post {
+        async fn collection() -> Collection<Self> {
+            let database = &connect().await.database;
+            {
+                // migrate indexes
+                let user_index = IndexModel::builder().keys(doc! { "user": 1 }).build();
+                let indexes = [user_index];
+                if let Err(err) = database
+                    .collection::<Self>(&Self::name())
+                    .create_indexes(indexes, None)
+                    .await
+                {
+                    tracing::error!("error creating {:?} indexes: {:?}", Self::name(), err);
+                }
+                tracing::debug!("indexes created for {:?}", Self::name());
+            }
+            database.collection(&Self::name())
+        }
+    }
+
+    pub fn nanoid() -> String {
         use nanoid::nanoid;
-        // ~2 million years needed, in order to have a 1% probability of at least one collision.
-        // https://zelark.github.io/nano-id-cc/
         nanoid!(
             20,
             &[
-                'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-                'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+                'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
+                'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '1', '2', '3', '4', '5', '6',
+                '7', '8', '9', '0',
             ]
         )
     }
-    fn create_pipeline(pipeline: &[PipelineStage]) -> Vec<Document> {
-        pipeline
-            .par_iter()
-            .map(|stage| match stage {
-                PipelineStage::Match(doc) => doc! { "$match": doc },
-                PipelineStage::Lookup(doc) => doc! {
-                    "$lookup": doc! {
-                        "from": doc.from.to_string(),
-                        "localField": doc.local_field.to_string(),
-                        "foreignField": doc.foreign_field.to_string(),
-                        "as": doc.as_field.to_string()
-                    }
-                },
-                PipelineStage::Project(doc) => doc! { "$project": doc },
-                PipelineStage::Unwind(path) => doc! {
-                    "$unwind": doc! {
-                        "path": path
-                    }
-                },
-                PipelineStage::AddFields(doc) => doc! { "$addFields": doc },
-                PipelineStage::Limit(limit) => doc! { "$limit": limit },
-                PipelineStage::Sort(doc) => doc! { "$sort": doc },
-            })
-            .collect::<Vec<_>>()
-    }
-    fn normalize_updates(updates: &Document) -> Document {
-        let (mut set_updates, mut document_updates) =
-            updates
-                .keys()
-                .fold((Document::new(), Document::new()), |mut acc, key| {
-                    let val = updates.get(key);
-                    if val.is_none() || key == "$set" {
-                        // $set is built internally, so skip it
-                        return acc;
-                    }
-                    if key.starts_with('$') {
-                        // indicates something like $inc / $push / $pull
-                        acc.1.insert(key, val);
-                    } else {
-                        // all other document field updates contained in $set
-                        acc.0.insert(key, val);
-                    }
-                    acc
-                });
-        // update timestamp
-        set_updates.insert("updated_at", chrono::Utc::now());
-        document_updates.insert("$set", set_updates);
-        // overall document now looks something like:
-        // { $set: { "updated_at": Date, ... }, "$inc": { ... }, "$push": { ... } }
-        document_updates
+
+    pub fn number() -> u32 {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        rng.gen_range(0..99999)
     }
 
-    // client api methods
-    async fn save(&self) -> Result<Self, MongooseError> {
-        match Self::collection().await.insert_one(self, None).await {
-            Ok(_) => Ok(self.clone()),
-            Err(err) => {
-                tracing::error!(
-                    "error inserting {:?} document: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                Err(MongooseError::Insert(Self::name()))
-            }
+    pub fn user() -> User {
+        let bool = number() % 2 == 0;
+        User {
+            username: format!("username_{}", nanoid()),
+            age: number(),
+            example_array: (0..=2).map(|_| number()).collect::<Vec<_>>(),
+            address: Address {
+                address: number(),
+                street: "Fake Street Name".to_string(),
+                city: "Fake City".to_string(),
+                state: "CA".to_string(),
+                zip: "F1256".to_string(),
+                country: "US".to_string(),
+                apt_number: if bool { Some("F35".to_string()) } else { None },
+            },
+            ..Default::default()
         }
     }
 
-    async fn bulk_insert(docs: &[Self]) -> Result<InsertManyResult, MongooseError> {
-        match Self::collection().await.insert_many(docs, None).await {
-            Ok(inserted) => Ok(inserted),
-            Err(err) => {
-                tracing::error!(
-                    "error bulk inserting {:?} documents: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                Err(MongooseError::BulkInsert(Self::name()))
-            }
+    pub fn post(user_id: String) -> Post {
+        Post {
+            user: user_id,
+            content: format!("here's my post: {}", nanoid()),
+            ..Default::default()
         }
     }
+}
 
-    async fn read(filter: Document) -> Result<Self, MongooseError> {
-        match Self::collection().await.find_one(filter, None).await {
-            Ok(result) => result.map_or_else(
-                || Err(MongooseError::NotFound(Self::name())),
-                |result| Ok(result),
-            ),
-            Err(err) => {
-                tracing::error!(
-                    "error reading {:?} document: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                Err(MongooseError::NotFound(Self::name()))
-            }
+#[cfg(test)]
+mod create {
+    use anyhow::Result;
+
+    use crate::mock::{self, User};
+    use crate::Model;
+
+    #[tokio::test]
+    async fn create_one() -> Result<()> {
+        let new_user = mock::user().save().await;
+        assert!(new_user.is_ok());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn bulk_insert() -> Result<()> {
+        let users = (0..5).into_iter().map(|_| mock::user()).collect::<Vec<_>>();
+        let inserted = User::bulk_insert(&users).await?;
+        assert!(inserted.inserted_ids.len() == 5);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn create_one_with_relation() -> Result<()> {
+        let new_user = mock::user();
+        let inserted = new_user.save().await?;
+        assert_eq!(inserted.username, new_user.username);
+        assert_eq!(inserted.age, new_user.age);
+        let new_post = mock::post(inserted.id.to_string());
+        let new_post = new_post.save().await?;
+        assert_eq!(new_post.id, new_post.id);
+        assert_eq!(new_post.user, inserted.id);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod read {
+    use anyhow::Result;
+    use chrono::{DateTime, Utc};
+    use serde::{Deserialize, Serialize};
+
+    use crate::mock::{self, Address, PopulatedPost, Post, User};
+    use crate::{
+        doc,
+        types::{ListOptions, LookupStage, PipelineStage},
+        Model,
+    };
+
+    #[tokio::test]
+    async fn read() -> Result<()> {
+        let new_user = mock::user().save().await?;
+        let user = User::read(doc! { "username": &new_user.username }).await?;
+        assert_eq!(user.username, new_user.username);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn read_by_id() -> Result<()> {
+        let new_user = mock::user().save().await?;
+        let user = User::read_by_id(&new_user.id).await?;
+        assert_eq!(user.username, new_user.username);
+        assert_eq!(user.id, new_user.id);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn list() -> Result<()> {
+        let users = (0..5).into_iter().map(|_| mock::user()).collect::<Vec<_>>();
+        User::bulk_insert(&users).await?;
+        let users = User::list(None, None).await?;
+        assert_eq!(users.len() > 0, true);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn pagination() -> Result<()> {
+        let users = (0..10)
+            .into_iter()
+            .map(|_| mock::user())
+            .collect::<Vec<_>>();
+        User::bulk_insert(&users).await?;
+
+        let users = User::list(
+            None,
+            Some(ListOptions {
+                limit: Some(10),
+                skip: Some(0),
+                sort: Some(doc! { "age": 1 }),
+                ..Default::default()
+            }),
+        )
+        .await?;
+        assert!(users.len() == 10);
+        for slice in users.windows(2) {
+            assert!(slice[0].age <= slice[1].age);
         }
+        Ok(())
     }
 
-    async fn read_by_id(id: &str) -> Result<Self, MongooseError> {
-        Self::read(doc! { "_id": id }).await
+    #[tokio::test]
+    async fn in_operator() -> Result<()> {
+        let users = (0..5).into_iter().map(|_| mock::user()).collect::<Vec<_>>();
+        User::bulk_insert(&users).await?;
+
+        let users = User::list(
+            None,
+            Some(ListOptions {
+                limit: Some(2),
+                sort: Some(doc! { "created_at": -1 }),
+                ..Default::default()
+            }),
+        )
+        .await?;
+        let ids = users.iter().map(|a| a.id.to_string()).collect::<Vec<_>>();
+        let matches = User::list(
+            Some(doc! {
+                "_id": { "$in": &ids }
+            }),
+            None,
+        )
+        .await?;
+        assert!(matches.len() == 2);
+        let match_ids = matches.iter().map(|a| a.id.to_string()).collect::<Vec<_>>();
+        assert!(match_ids.contains(&ids[0]));
+        assert!(match_ids.contains(&ids[1]));
+        Ok(())
     }
 
-    async fn list(
-        filter: Option<Document>,
-        options: Option<ListOptions>,
-    ) -> Result<Vec<Self>, MongooseError> {
-        let opts = match options {
-            Some(opts) => {
-                let limit = if opts.limit.is_some() {
-                    opts.limit
-                } else {
-                    Some(1_000)
-                };
-                Some(
-                    FindOptions::builder()
-                        .skip(opts.skip)
-                        .limit(limit)
-                        .sort(opts.sort)
-                        .projection(None)
-                        .build(),
-                )
-            }
-            None => None,
-        };
-        let mut result_cursor = match Self::collection().await.find(filter, opts).await {
-            Ok(cursor) => cursor,
-            Err(err) => {
-                tracing::error!(
-                    "error listing {:?} documents: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                return Err(MongooseError::List(Self::name()));
-            }
-        };
-        let mut list_result = vec![];
-        while let Some(cursor) = result_cursor.next().await {
-            match cursor {
-                Ok(document) => list_result.push(document),
-                Err(err) => {
-                    tracing::error!(
-                        "error iterating {:?} cursor: {:?}",
-                        Self::name(),
-                        err.to_string()
-                    );
-                    continue;
+    #[tokio::test]
+    async fn count() -> Result<()> {
+        let user = mock::user().save().await?;
+        let count = User::count(Some(doc! { "username": user.username })).await?;
+        assert!(count == 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn match_aggregate() -> Result<()> {
+        let user = mock::user().save().await?;
+        let posts = (0..10)
+            .into_iter()
+            .map(|_| mock::post(user.id.to_string()))
+            .collect::<Vec<_>>();
+        Post::bulk_insert(&posts).await?;
+        let results = Post::aggregate::<PopulatedPost>(&[
+            PipelineStage::Match(doc! {
+                "user": user.id.to_string()
+            }),
+            PipelineStage::Lookup(LookupStage {
+                from: User::name(),
+                foreign_field: "_id".to_string(),
+                local_field: "user".to_string(),
+                as_field: "user".to_string(),
+            }),
+            PipelineStage::Unwind("$user".to_string()),
+        ])
+        .await?;
+        assert!(results.len() >= 1);
+        results
+            .iter()
+            .for_each(|post| assert!(post.user.id == user.id));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn aggregate_arbitrary() -> Result<()> {
+        let user = mock::user().save().await?;
+        Post::bulk_insert(
+            &(0..10)
+                .into_iter()
+                .map(|_| mock::post(user.id.to_string()))
+                .collect::<Vec<_>>(),
+        )
+        .await?;
+        // create aggregate
+        // this should demonstrate all supported
+        // aggregation features into a generic Value
+        let results = Post::aggregate::<serde_json::Value>(&[
+            PipelineStage::Match(doc! { "user": user.id }),
+            PipelineStage::Limit(2),
+            PipelineStage::Lookup(LookupStage {
+                from: User::name(),
+                foreign_field: "_id".to_string(),
+                local_field: "user".to_string(),
+                as_field: "user".to_string(),
+            }),
+            PipelineStage::Unwind("$user".to_string()),
+            PipelineStage::Project(doc! {
+                "content": 1,
+                "created_at": 1,
+                "user._id": 1,
+                "user.username": 1,
+                "user.example_array": 1,
+            }),
+            PipelineStage::AddFields(doc! {
+                "array_sum": doc! { "$sum": "$user.example_array" },
+                "post_date": "$created_at",
+            }),
+            PipelineStage::Sort(doc! { "post_date": -1 }),
+        ])
+        .await?;
+        assert!(results.len() == 2);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn join_to_many() -> Result<()> {
+        use crate::Timestamp;
+        #[derive(Debug, Deserialize, Serialize, Clone)]
+        struct ShallowPost {
+            content: String,
+            #[serde(with = "Timestamp")]
+            created_at: DateTime<Utc>,
+        }
+        #[derive(Debug, Deserialize, Serialize, Clone)]
+        struct UserPosts {
+            #[serde(rename = "_id")]
+            id: String,
+            username: String,
+            age: u32,
+            address: Address,
+            example_array: Vec<u32>,
+            #[serde(with = "Timestamp")]
+            created_at: DateTime<Utc>,
+            #[serde(with = "Timestamp")]
+            updated_at: DateTime<Utc>,
+            posts: Vec<ShallowPost>,
+        }
+        let user = mock::user().save().await?;
+        Post::bulk_insert(
+            &(0..10)
+                .into_iter()
+                .map(|_| mock::post(user.id.to_string()))
+                .collect::<Vec<_>>(),
+        )
+        .await?;
+        // build aggregate -> populate many to one
+        let results = User::aggregate::<UserPosts>(&[
+            PipelineStage::Match(doc! { "_id": &user.id }),
+            PipelineStage::Lookup(LookupStage {
+                from: Post::name(),
+                foreign_field: "user".to_string(),
+                local_field: "_id".to_string(),
+                as_field: "posts".to_string(),
+            }),
+            PipelineStage::Project(doc! {
+                "posts": {
+                    "user": 0,
+                    "_id": 0,
+                    "updated_at": 0
                 }
-            }
-        }
-        Ok(list_result)
+            }),
+        ])
+        .await?;
+        let populated_user = results.first().unwrap();
+        assert!(populated_user.id == user.id);
+        assert!(populated_user.posts.len() == 10);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod update {
+    use anyhow::Result;
+
+    use crate::mock::{self, User};
+    use crate::{doc, Model};
+
+    #[tokio::test]
+    async fn increment() -> Result<()> {
+        let user = mock::user().save().await?;
+        let updated = User::update(
+            doc! { "_id": &user.id },
+            doc! {
+                "$inc": { "address.address": 1 }
+            },
+        )
+        .await?;
+        assert!(&updated.address.address > &user.address.address);
+        Ok(())
     }
 
-    async fn update(filter: Document, updates: Document) -> Result<Self, MongooseError> {
-        match Self::collection()
-            .await
-            .find_one_and_update(
-                filter,
-                Self::normalize_updates(&updates),
-                FindOneAndUpdateOptions::builder()
-                    .return_document(ReturnDocument::After)
-                    .build(),
-            )
-            .await
-        {
-            Ok(updated) => updated.map_or_else(
-                || Err(MongooseError::NotFound(Self::name())),
-                |result| Ok(result),
-            ),
-            Err(err) => {
-                tracing::error!(
-                    "error updating {:?} document: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                Err(MongooseError::Update(Self::name()))
-            }
-        }
+    #[tokio::test]
+    async fn decrement() -> Result<()> {
+        let user = mock::user().save().await?;
+        let updated = User::update(
+            doc! { "_id": &user.id },
+            doc! {
+                "$inc": { "age": -1 }
+            },
+        )
+        .await?;
+        assert!(&updated.age < &user.age);
+        Ok(())
     }
 
-    async fn bulk_update(
-        filter: Document,
-        updates: Document,
-    ) -> Result<UpdateResult, MongooseError> {
-        match Self::collection()
-            .await
-            .update_many(filter, Self::normalize_updates(&updates), None)
-            .await
-        {
-            Ok(updates) => Ok(updates),
-            Err(err) => {
-                tracing::error!(
-                    "error updating {:?} documents: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                Err(MongooseError::BulkUpdate(Self::name()))
-            }
-        }
+    #[tokio::test]
+    async fn push() -> Result<()> {
+        let user = mock::user().save().await?;
+        assert!(user.example_array.len() == 3);
+        let updated = User::update(
+            doc! { "_id": user.id },
+            doc! {
+                "$push": { "example_array": 1234 }
+            },
+        )
+        .await?;
+        assert!(updated.example_array.len() == 4);
+        Ok(())
     }
 
-    async fn delete(filter: Document) -> Result<DeleteResult, MongooseError> {
-        match Self::collection().await.delete_one(filter, None).await {
-            Ok(found) => Ok(found),
-            Err(err) => {
-                tracing::error!(
-                    "error deleting {:?} document: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                Err(MongooseError::Delete(Self::name()))
-            }
-        }
+    #[tokio::test]
+    async fn pull() -> Result<()> {
+        let user = mock::user().save().await?;
+        assert!(user.example_array.len() == 3);
+        let updated = User::update(
+            doc! { "_id": user.id },
+            doc! {
+                "$pull": { "example_array": user.example_array[0] }
+            },
+        )
+        .await?;
+        assert!(updated.example_array.len() == 2);
+        Ok(())
     }
 
-    async fn bulk_delete(filter: Document) -> Result<DeleteResult, MongooseError> {
-        match Self::collection().await.delete_many(filter, None).await {
-            Ok(found) => Ok(found),
-            Err(err) => {
-                tracing::error!(
-                    "error bulk deleting {:?} documents: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                Err(MongooseError::BulkDelete(Self::name()))
-            }
-        }
+    #[tokio::test]
+    async fn update_sub_document() -> Result<()> {
+        let user = mock::user().save().await?;
+        let new_city = mock::nanoid();
+        let updated = User::update(
+            doc! { "_id": user.id },
+            doc! {
+                "address.city": &new_city
+            },
+        )
+        .await?;
+        assert!(updated.address.city == new_city);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod delete_tests {
+    use anyhow::Result;
+
+    use crate::mock::{self, User};
+    use crate::{doc, Model};
+
+    #[tokio::test]
+    async fn delete_one() -> Result<()> {
+        let inserted = mock::user().save().await?;
+        let found = User::read_by_id(&inserted.id).await?;
+        assert_eq!(found.id, inserted.id);
+        // delete
+        let deleted = User::delete(doc! { "_id": &inserted.id }).await;
+        assert!(deleted.is_ok());
+        // should not exist
+        let found = User::read_by_id(&inserted.id).await;
+        assert!(found.is_err());
+        Ok(())
     }
 
-    async fn count(filter: Option<Document>) -> Result<u64, MongooseError> {
-        match Self::collection().await.count_documents(filter, None).await {
-            Ok(count) => Ok(count),
-            Err(err) => {
-                tracing::error!(
-                    "error counting {:?} documents: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                Err(MongooseError::Count(Self::name()))
-            }
-        }
-    }
-
-    async fn aggregate<T: DeserializeOwned + Send>(
-        pipeline: &[PipelineStage],
-    ) -> Result<Vec<T>, MongooseError> {
-        let pipeline = Self::create_pipeline(pipeline);
-        let mut result_cursor = match Self::collection().await.aggregate(pipeline, None).await {
-            Ok(cursor) => cursor,
-            Err(err) => {
-                tracing::error!(
-                    "error creating {:?} aggregate cursor: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                return Err(MongooseError::Aggregate(Self::name()));
-            }
-        };
-        let mut aggregate_docs = vec![];
-        while let Some(cursor) = result_cursor.next().await {
-            match cursor {
-                Ok(document) => match bson::from_document::<T>(document) {
-                    Ok(data) => aggregate_docs.push(data),
-                    Err(err) => {
-                        tracing::error!(
-                            "error converting {:?} bson in aggregation: {:?}",
-                            Self::name(),
-                            err.to_string()
-                        );
-                        return Err(MongooseError::Aggregate(Self::name()));
-                    }
-                },
-                Err(err) => {
-                    tracing::error!(
-                        "error iterating {:?} aggregate cursor: {:?}",
-                        Self::name(),
-                        err.to_string()
-                    );
-                    return Err(MongooseError::Aggregate(Self::name()));
-                }
-            }
-        }
-        Ok(aggregate_docs)
+    #[tokio::test]
+    async fn bulk_delete() -> Result<()> {
+        let users = (0..10)
+            .into_iter()
+            .map(|_| mock::user())
+            .collect::<Vec<_>>();
+        User::bulk_insert(&users).await?;
+        // delete any null address
+        User::bulk_delete(doc! {
+            "address.apt_number": None::<String>
+        })
+        .await?;
+        let null_addresses = User::list(
+            Some(doc! {
+                "address.apt_number": None::<String>
+            }),
+            None,
+        )
+        .await?;
+        assert!(null_addresses.len() == 0);
+        Ok(())
     }
 }
