@@ -542,7 +542,7 @@ mod update {
 }
 
 #[cfg(test)]
-mod delete_tests {
+mod delete {
     use anyhow::Result;
 
     use crate::mock::{self, User};
