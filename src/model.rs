@@ -1,4 +1,3 @@
-use anyhow::Result;
 use async_trait::async_trait;
 use bson::{doc, Document};
 use convert_case::{Case, Casing};

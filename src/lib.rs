@@ -200,20 +200,19 @@ mod mock {
 
 #[cfg(test)]
 mod create {
-    use anyhow::Result;
-
     use crate::mock::{self, User};
+    use crate::types::MongooseError;
     use crate::Model;
 
     #[tokio::test]
-    async fn create_one() -> Result<()> {
+    async fn create_one() -> Result<(), MongooseError> {
         let new_user = mock::user().save().await;
         assert!(new_user.is_ok());
         Ok(())
     }
 
     #[tokio::test]
-    async fn bulk_insert() -> Result<()> {
+    async fn bulk_insert() -> Result<(), MongooseError> {
         let users = (0..5).into_iter().map(|_| mock::user()).collect::<Vec<_>>();
         let inserted = User::bulk_insert(&users).await?;
         assert!(inserted.inserted_ids.len() == 5);
@@ -221,7 +220,7 @@ mod create {
     }
 
     #[tokio::test]
-    async fn create_one_with_relation() -> Result<()> {
+    async fn create_one_with_relation() -> Result<(), MongooseError> {
         let new_user = mock::user();
         let inserted = new_user.save().await?;
         assert_eq!(inserted.username, new_user.username);
@@ -236,11 +235,11 @@ mod create {
 
 #[cfg(test)]
 mod read {
-    use anyhow::Result;
     use chrono::{DateTime, Utc};
     use serde::{Deserialize, Serialize};
 
     use crate::mock::{self, Address, PopulatedPost, Post, User};
+    use crate::types::MongooseError;
     use crate::{
         doc,
         types::{ListOptions, LookupStage, PipelineStage},
@@ -248,7 +247,7 @@ mod read {
     };
 
     #[tokio::test]
-    async fn read() -> Result<()> {
+    async fn read() -> Result<(), MongooseError> {
         let new_user = mock::user().save().await?;
         let user = User::read(doc! { "username": &new_user.username }).await?;
         assert_eq!(user.username, new_user.username);
@@ -256,7 +255,7 @@ mod read {
     }
 
     #[tokio::test]
-    async fn read_by_id() -> Result<()> {
+    async fn read_by_id() -> Result<(), MongooseError> {
         let new_user = mock::user().save().await?;
         let user = User::read_by_id(&new_user.id).await?;
         assert_eq!(user.username, new_user.username);
@@ -265,7 +264,7 @@ mod read {
     }
 
     #[tokio::test]
-    async fn list() -> Result<()> {
+    async fn list() -> Result<(), MongooseError> {
         let users = (0..5).into_iter().map(|_| mock::user()).collect::<Vec<_>>();
         User::bulk_insert(&users).await?;
         let users = User::list(None, None).await?;
@@ -274,7 +273,7 @@ mod read {
     }
 
     #[tokio::test]
-    async fn pagination() -> Result<()> {
+    async fn pagination() -> Result<(), MongooseError> {
         let users = (0..10)
             .into_iter()
             .map(|_| mock::user())
@@ -299,7 +298,7 @@ mod read {
     }
 
     #[tokio::test]
-    async fn in_operator() -> Result<()> {
+    async fn in_operator() -> Result<(), MongooseError> {
         let users = (0..5).into_iter().map(|_| mock::user()).collect::<Vec<_>>();
         User::bulk_insert(&users).await?;
 
@@ -328,7 +327,7 @@ mod read {
     }
 
     #[tokio::test]
-    async fn count() -> Result<()> {
+    async fn count() -> Result<(), MongooseError> {
         let user = mock::user().save().await?;
         let count = User::count(Some(doc! { "username": user.username })).await?;
         assert!(count == 1);
@@ -336,7 +335,7 @@ mod read {
     }
 
     #[tokio::test]
-    async fn match_aggregate() -> Result<()> {
+    async fn match_aggregate() -> Result<(), MongooseError> {
         let user = mock::user().save().await?;
         let posts = (0..10)
             .into_iter()
@@ -364,7 +363,7 @@ mod read {
     }
 
     #[tokio::test]
-    async fn aggregate_arbitrary() -> Result<()> {
+    async fn aggregate_arbitrary() -> Result<(), MongooseError> {
         let user = mock::user().save().await?;
         Post::bulk_insert(
             &(0..10)
@@ -405,7 +404,7 @@ mod read {
     }
 
     #[tokio::test]
-    async fn join_to_many() -> Result<()> {
+    async fn join_to_many() -> Result<(), MongooseError> {
         use crate::Timestamp;
         #[derive(Debug, Deserialize, Serialize, Clone)]
         struct ShallowPost {
@@ -462,13 +461,12 @@ mod read {
 
 #[cfg(test)]
 mod update {
-    use anyhow::Result;
-
     use crate::mock::{self, User};
+    use crate::types::MongooseError;
     use crate::{doc, Model};
 
     #[tokio::test]
-    async fn increment() -> Result<()> {
+    async fn increment() -> Result<(), MongooseError> {
         let user = mock::user().save().await?;
         let updated = User::update(
             doc! { "_id": &user.id },
@@ -482,7 +480,7 @@ mod update {
     }
 
     #[tokio::test]
-    async fn decrement() -> Result<()> {
+    async fn decrement() -> Result<(), MongooseError> {
         let user = mock::user().save().await?;
         let updated = User::update(
             doc! { "_id": &user.id },
@@ -496,7 +494,7 @@ mod update {
     }
 
     #[tokio::test]
-    async fn push() -> Result<()> {
+    async fn push() -> Result<(), MongooseError> {
         let user = mock::user().save().await?;
         assert!(user.example_array.len() == 3);
         let updated = User::update(
@@ -511,7 +509,7 @@ mod update {
     }
 
     #[tokio::test]
-    async fn pull() -> Result<()> {
+    async fn pull() -> Result<(), MongooseError> {
         let user = mock::user().save().await?;
         assert!(user.example_array.len() == 3);
         let updated = User::update(
@@ -526,7 +524,7 @@ mod update {
     }
 
     #[tokio::test]
-    async fn update_sub_document() -> Result<()> {
+    async fn update_sub_document() -> Result<(), MongooseError> {
         let user = mock::user().save().await?;
         let new_city = mock::nanoid();
         let updated = User::update(
@@ -543,13 +541,12 @@ mod update {
 
 #[cfg(test)]
 mod delete {
-    use anyhow::Result;
-
     use crate::mock::{self, User};
+    use crate::types::MongooseError;
     use crate::{doc, Model};
 
     #[tokio::test]
-    async fn delete_one() -> Result<()> {
+    async fn delete_one() -> Result<(), MongooseError> {
         let inserted = mock::user().save().await?;
         let found = User::read_by_id(&inserted.id).await?;
         assert_eq!(found.id, inserted.id);
@@ -563,7 +560,7 @@ mod delete {
     }
 
     #[tokio::test]
-    async fn bulk_delete() -> Result<()> {
+    async fn bulk_delete() -> Result<(), MongooseError> {
         let users = (0..10)
             .into_iter()
             .map(|_| mock::user())
