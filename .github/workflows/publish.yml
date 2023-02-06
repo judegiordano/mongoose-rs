@@ -39,6 +39,15 @@ jobs:
       - name: cargo test
         run: cargo test-verbose
 
+      # - name: add latest nextest
+      #   uses: taiki-e/install-action@nextest
+
+      # - name: nextest unit tests
+      #   uses: actions-rs/cargo@v1
+      #   with:
+      #     command: nextest
+      #     args: run --no-capture --lib
+
       - name: cargo publish
         run: cargo publish
 

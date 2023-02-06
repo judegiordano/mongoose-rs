@@ -51,7 +51,6 @@ pub trait Model:
             },
         )
     }
-    async fn create_indexes() {}
     fn generate_id() -> String {
         use nanoid::nanoid;
         // ~2 million years needed, in order to have a 1% probability of at least one collision.

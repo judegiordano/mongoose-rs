@@ -14,6 +14,8 @@ lazy_static! {
 }
 
 pub async fn connect() -> Arc<Connection> {
+    use dotenv::dotenv;
+    dotenv().ok();
     let mongo_uri = std::env::var("MONGO_URI").map_or(
         "mongodb://localhost:27017/mongoose-rs-local".to_string(),
         |uri| uri,
