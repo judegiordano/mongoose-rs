@@ -60,7 +60,7 @@ pub trait Model:
             .map(|stage| match stage {
                 PipelineStage::Match(doc) => doc! { "$match": doc },
                 PipelineStage::Lookup(doc) => doc! {
-                    "$lookup": doc! {
+                    "$lookup": {
                         "from": doc.from.to_string(),
                         "localField": doc.local_field.to_string(),
                         "foreignField": doc.foreign_field.to_string(),
@@ -68,11 +68,7 @@ pub trait Model:
                     }
                 },
                 PipelineStage::Project(doc) => doc! { "$project": doc },
-                PipelineStage::Unwind(path) => doc! {
-                    "$unwind": doc! {
-                        "path": path
-                    }
-                },
+                PipelineStage::Unwind(path) => doc! { "$unwind": { "path": path } },
                 PipelineStage::AddFields(doc) => doc! { "$addFields": doc },
                 PipelineStage::Limit(limit) => doc! { "$limit": limit },
                 PipelineStage::Sort(doc) => doc! { "$sort": doc },
@@ -296,10 +292,9 @@ pub trait Model:
         }
     }
 
-    async fn aggregate<T: DeserializeOwned + Send>(
-        pipeline: &[PipelineStage],
+    async fn aggregate_raw<T: DeserializeOwned + Send>(
+        pipeline: Vec<Document>,
     ) -> Result<Vec<T>, MongooseError> {
-        let pipeline = Self::create_pipeline(pipeline);
         let mut result_cursor = match Self::collection().await.aggregate(pipeline, None).await {
             Ok(cursor) => cursor,
             Err(err) => {
@@ -336,5 +331,12 @@ pub trait Model:
             }
         }
         Ok(aggregate_docs)
+    }
+
+    async fn aggregate<T: DeserializeOwned + Send>(
+        pipeline: &[PipelineStage],
+    ) -> Result<Vec<T>, MongooseError> {
+        let pipeline = Self::create_pipeline(pipeline);
+        Self::aggregate_raw::<T>(pipeline).await
     }
 }

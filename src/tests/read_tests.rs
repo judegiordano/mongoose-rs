@@ -222,4 +222,18 @@ mod raed {
         assert!(populated_user.posts.len() == 10);
         Ok(())
     }
+
+    #[tokio::test]
+    async fn raw_aggregate() -> Result<(), MongooseError> {
+        let user = mock::user().save().await?;
+        let found = User::aggregate_raw::<User>(vec![doc! {
+            "$match": {
+                "username": &user.username
+            }
+        }])
+        .await?;
+        assert!(found.first().unwrap().username == user.username);
+        assert!(found.first().unwrap().id == user.id);
+        Ok(())
+    }
 }

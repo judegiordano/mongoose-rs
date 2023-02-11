@@ -32,6 +32,10 @@ mod mock {
         #[serde(rename = "_id")]
         pub id: String,
         pub username: String,
+        pub email: String,
+        pub avatar_hash: String,
+        pub slug: String,
+        pub password: String,
         pub age: u32,
         pub address: Address,
         pub example_array: Vec<u32>,
@@ -47,6 +51,10 @@ mod mock {
             Self {
                 id: Self::generate_id(),
                 username: String::new(),
+                email: String::new(),
+                avatar_hash: String::new(),
+                slug: String::new(),
+                password: String::new(),
                 example_array: Vec::new(),
                 address: Address {
                     address: u32::default(),
@@ -74,7 +82,15 @@ mod mock {
                     .keys(doc! { "username": 1 })
                     .options(IndexOptions::builder().unique(true).build())
                     .build();
-                let indexes = [username_index];
+                let slug_index = IndexModel::builder()
+                    .keys(doc! { "slug": 1 })
+                    .options(IndexOptions::builder().unique(true).build())
+                    .build();
+                let email_index = IndexModel::builder()
+                    .keys(doc! { "email": 1 })
+                    .options(IndexOptions::builder().unique(true).build())
+                    .build();
+                let indexes = [username_index, slug_index, email_index];
                 if let Err(err) = database
                     .collection::<Self>(&Self::name())
                     .create_indexes(indexes, None)
@@ -163,10 +179,34 @@ mod mock {
         rng.gen_range(0..99999)
     }
 
+    fn hash_password(password: &str) -> String {
+        use argon2::Config;
+        use rand::{rngs::OsRng, RngCore};
+        let mut salt = [0u8; 32];
+        OsRng.fill_bytes(&mut salt);
+        let config = Config::default();
+        match argon2::hash_encoded(password.as_bytes(), &salt, &config) {
+            Ok(hash) => hash,
+            Err(err) => {
+                tracing::error!("error hashing password {:?}", err);
+                std::process::exit(1)
+            }
+        }
+    }
+
     pub fn user() -> User {
         let bool = number() % 2 == 0;
+        let username = format!("username_{}", nanoid());
+        let email = format!("email+{}@mail.com", nanoid());
+        let email = email.trim().to_lowercase();
+        let digest = md5::compute(email.as_bytes());
+        let avatar_hash = format!("{digest:?}");
         User {
-            username: format!("username_{}", nanoid()),
+            username: username.to_string(),
+            slug: slug::slugify(username),
+            password: hash_password("password"),
+            email,
+            avatar_hash,
             age: number(),
             example_array: (0..=2).map(|_| number()).collect::<Vec<_>>(),
             address: Address {
