@@ -4,8 +4,8 @@ use convert_case::{Case, Casing};
 use futures::StreamExt;
 use mongodb::{
     options::{FindOneAndUpdateOptions, FindOptions, ReturnDocument},
-    results::{DeleteResult, InsertManyResult, UpdateResult},
-    Client, Collection, Database,
+    results::{CreateIndexesResult, DeleteResult, InsertManyResult, UpdateResult},
+    Client, Collection, Database, IndexModel,
 };
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{de::DeserializeOwned, Serialize};
@@ -336,5 +336,22 @@ pub trait Model:
     ) -> Result<Vec<T>, MongooseError> {
         let pipeline = Self::create_pipeline(pipeline);
         Self::aggregate_raw::<T>(pipeline).await
+    }
+
+    async fn create_indexes(indexes: &[IndexModel]) -> Result<CreateIndexesResult, MongooseError> {
+        match Self::collection()
+            .create_indexes(indexes.to_vec(), None)
+            .await
+        {
+            Ok(result) => Ok(result),
+            Err(err) => {
+                tracing::error!(
+                    "error creating {:?} indexes: {:?}",
+                    Self::name(),
+                    err.to_string()
+                );
+                Err(MongooseError::CreateIndex(Self::name()))
+            }
+        }
     }
 }

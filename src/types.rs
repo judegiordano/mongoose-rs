@@ -3,12 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use thiserror::Error;
 
-/// This is still under development
-#[derive(Serialize, Deserialize, Default, Debug)]
-pub struct ReadOptions {
-    pub projection: Option<Document>,
-}
-
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct ListOptions {
     pub limit: Option<i64>,
@@ -60,4 +54,6 @@ pub enum MongooseError {
     Count(String),
     #[error("error aggregating {0} documents")]
     Aggregate(String),
+    #[error("error creaeting {0} indexes")]
+    CreateIndex(String),
 }

@@ -2,7 +2,11 @@
 mod create {
     use crate::tests::mock::{self, Post, User};
     use crate::types::MongooseError;
-    use crate::Model;
+    use crate::{
+        doc,
+        mongodb::{options::IndexOptions, IndexModel},
+        Model,
+    };
 
     #[tokio::test]
     async fn create_one() -> Result<(), MongooseError> {
@@ -44,6 +48,29 @@ mod create {
             .collect::<Vec<_>>();
         let inserted = Post::bulk_insert(&posts).await?;
         assert!(inserted.inserted_ids.len() == 5);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn create_indexes() -> Result<(), MongooseError> {
+        let username_index = IndexModel::builder()
+            .keys(doc! { "username": 1 })
+            .options(IndexOptions::builder().unique(true).build())
+            .build();
+        let slug_index = IndexModel::builder()
+            .keys(doc! { "slug": 1 })
+            .options(IndexOptions::builder().unique(true).build())
+            .build();
+        let email_index = IndexModel::builder()
+            .keys(doc! { "email": 1 })
+            .options(IndexOptions::builder().unique(true).build())
+            .build();
+        let indexes = [username_index, slug_index, email_index];
+        let created_names = User::create_indexes(&indexes).await?.index_names;
+        let names = User::collection().list_index_names().await.unwrap();
+        created_names
+            .iter()
+            .for_each(|name| assert!(names.contains(name)));
         Ok(())
     }
 }
