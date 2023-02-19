@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod create {
-    use crate::tests::mock::{self, User};
+    use crate::tests::mock::{self, Post, User};
     use crate::types::MongooseError;
     use crate::Model;
 
@@ -29,6 +29,21 @@ mod create {
         let new_post = new_post.save().await?;
         assert_eq!(new_post.id, new_post.id);
         assert_eq!(new_post.user, inserted.id);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn bulk_create_with_relation() -> Result<(), MongooseError> {
+        let new_user = mock::user();
+        let inserted = new_user.save().await?;
+        assert_eq!(inserted.username, new_user.username);
+        assert_eq!(inserted.age, new_user.age);
+        let posts = (0..5)
+            .into_iter()
+            .map(|_| mock::post(inserted.id.to_string()))
+            .collect::<Vec<_>>();
+        let inserted = Post::bulk_insert(&posts).await?;
+        assert!(inserted.inserted_ids.len() == 5);
         Ok(())
     }
 }
