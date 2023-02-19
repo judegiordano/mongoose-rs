@@ -10,10 +10,7 @@ mod mock {
     use crate::{
         async_trait,
         chrono::{DateTime, Utc},
-        connection::connect,
-        doc,
-        mongodb::{options::IndexOptions, Collection, IndexModel},
-        Model, Timestamp,
+        doc, Model, Timestamp,
     };
 
     #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -73,35 +70,7 @@ mod mock {
     }
 
     #[async_trait]
-    impl Model for User {
-        async fn collection() -> Collection<Self> {
-            let database = &connect().await.database;
-            {
-                // migrate indexes
-                let username_index = IndexModel::builder()
-                    .keys(doc! { "username": 1 })
-                    .options(IndexOptions::builder().unique(true).build())
-                    .build();
-                let slug_index = IndexModel::builder()
-                    .keys(doc! { "slug": 1 })
-                    .options(IndexOptions::builder().unique(true).build())
-                    .build();
-                let email_index = IndexModel::builder()
-                    .keys(doc! { "email": 1 })
-                    .options(IndexOptions::builder().unique(true).build())
-                    .build();
-                let indexes = [username_index, slug_index, email_index];
-                if let Err(err) = database
-                    .collection::<Self>(&Self::name())
-                    .create_indexes(indexes, None)
-                    .await
-                {
-                    tracing::error!("error creating {:?} indexes: {:?}", Self::name(), err);
-                }
-            }
-            database.collection(&Self::name())
-        }
-    }
+    impl Model for User {}
 
     #[derive(Debug, Deserialize, Serialize, Clone)]
     pub struct Post {
@@ -141,25 +110,7 @@ mod mock {
     }
 
     #[async_trait]
-    impl Model for Post {
-        async fn collection() -> Collection<Self> {
-            let database = &connect().await.database;
-            {
-                // migrate indexes
-                let user_index = IndexModel::builder().keys(doc! { "user": 1 }).build();
-                let indexes = [user_index];
-                if let Err(err) = database
-                    .collection::<Self>(&Self::name())
-                    .create_indexes(indexes, None)
-                    .await
-                {
-                    tracing::error!("error creating {:?} indexes: {:?}", Self::name(), err);
-                }
-                tracing::debug!("indexes created for {:?}", Self::name());
-            }
-            database.collection(&Self::name())
-        }
-    }
+    impl Model for Post {}
 
     pub fn nanoid() -> String {
         use nanoid::nanoid;

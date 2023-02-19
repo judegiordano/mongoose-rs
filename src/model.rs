@@ -20,14 +20,14 @@ use crate::{
 pub trait Model:
     Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + Default + Clone + Debug
 {
-    async fn client() -> &'static Client {
-        &POOL.get().await.client
+    fn client() -> &'static Client {
+        &POOL.client
     }
-    async fn database() -> &'static Database {
-        &POOL.get().await.database
+    fn database() -> &'static Database {
+        &POOL.database
     }
-    async fn collection() -> Collection<Self> {
-        POOL.get().await.database.collection::<Self>(&Self::name())
+    fn collection() -> Collection<Self> {
+        POOL.database.collection::<Self>(&Self::name())
     }
     fn name() -> String {
         let name = std::any::type_name::<Self>();
@@ -104,7 +104,7 @@ pub trait Model:
 
     // client api methods
     async fn save(&self) -> Result<Self, MongooseError> {
-        match Self::collection().await.insert_one(self, None).await {
+        match Self::collection().insert_one(self, None).await {
             Ok(_) => Ok(self.clone()),
             Err(err) => {
                 tracing::error!(
@@ -118,7 +118,7 @@ pub trait Model:
     }
 
     async fn bulk_insert(docs: &[Self]) -> Result<InsertManyResult, MongooseError> {
-        match Self::collection().await.insert_many(docs, None).await {
+        match Self::collection().insert_many(docs, None).await {
             Ok(inserted) => Ok(inserted),
             Err(err) => {
                 tracing::error!(
@@ -132,7 +132,7 @@ pub trait Model:
     }
 
     async fn read(filter: Document) -> Result<Self, MongooseError> {
-        match Self::collection().await.find_one(filter, None).await {
+        match Self::collection().find_one(filter, None).await {
             Ok(result) => result.map_or_else(
                 || Err(MongooseError::NotFound(Self::name())),
                 |result| Ok(result),
@@ -174,7 +174,7 @@ pub trait Model:
             }
             None => None,
         };
-        let mut result_cursor = match Self::collection().await.find(filter, opts).await {
+        let mut result_cursor = match Self::collection().find(filter, opts).await {
             Ok(cursor) => cursor,
             Err(err) => {
                 tracing::error!(
@@ -204,7 +204,6 @@ pub trait Model:
 
     async fn update(filter: Document, updates: Document) -> Result<Self, MongooseError> {
         match Self::collection()
-            .await
             .find_one_and_update(
                 filter,
                 Self::normalize_updates(&updates),
@@ -234,7 +233,6 @@ pub trait Model:
         updates: Document,
     ) -> Result<UpdateResult, MongooseError> {
         match Self::collection()
-            .await
             .update_many(filter, Self::normalize_updates(&updates), None)
             .await
         {
@@ -251,7 +249,7 @@ pub trait Model:
     }
 
     async fn delete(filter: Document) -> Result<DeleteResult, MongooseError> {
-        match Self::collection().await.delete_one(filter, None).await {
+        match Self::collection().delete_one(filter, None).await {
             Ok(found) => Ok(found),
             Err(err) => {
                 tracing::error!(
@@ -265,7 +263,7 @@ pub trait Model:
     }
 
     async fn bulk_delete(filter: Document) -> Result<DeleteResult, MongooseError> {
-        match Self::collection().await.delete_many(filter, None).await {
+        match Self::collection().delete_many(filter, None).await {
             Ok(found) => Ok(found),
             Err(err) => {
                 tracing::error!(
@@ -279,7 +277,7 @@ pub trait Model:
     }
 
     async fn count(filter: Option<Document>) -> Result<u64, MongooseError> {
-        match Self::collection().await.count_documents(filter, None).await {
+        match Self::collection().count_documents(filter, None).await {
             Ok(count) => Ok(count),
             Err(err) => {
                 tracing::error!(
@@ -295,7 +293,7 @@ pub trait Model:
     async fn aggregate_raw<T: DeserializeOwned + Send>(
         pipeline: Vec<Document>,
     ) -> Result<Vec<T>, MongooseError> {
-        let mut result_cursor = match Self::collection().await.aggregate(pipeline, None).await {
+        let mut result_cursor = match Self::collection().aggregate(pipeline, None).await {
             Ok(cursor) => cursor,
             Err(err) => {
                 tracing::error!(

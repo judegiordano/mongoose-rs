@@ -1,7 +1,6 @@
-use async_once::AsyncOnce;
-use lazy_static::lazy_static;
 use mimalloc::MiMalloc;
 use mongodb::{options::ClientOptions, Client, Database};
+use once_cell::sync::Lazy;
 use std::sync::Arc;
 
 #[global_allocator]
@@ -12,9 +11,11 @@ pub struct Connection {
     pub client: Client,
 }
 
-lazy_static! {
-    pub static ref POOL: AsyncOnce<Arc<Connection>> = AsyncOnce::new(async { connect().await });
-}
+pub static POOL: Lazy<Arc<Connection>> = Lazy::new(|| {
+    let connection = futures::executor::block_on(async { connect().await });
+    tracing::debug!("connected to {:?}", connection.database.name());
+    connection
+});
 
 pub async fn connect() -> Arc<Connection> {
     use dotenv::dotenv;
