@@ -13,7 +13,7 @@ use std::fmt::Debug;
 
 use crate::{
     connection::POOL,
-    types::{ListOptions, MongooseError, PipelineStage},
+    types::{IndexOptions, ListOptions, MongooseError, PipelineStage},
 };
 
 #[async_trait]
@@ -72,6 +72,22 @@ pub trait Model:
                 PipelineStage::AddFields(doc) => doc! { "$addFields": doc },
                 PipelineStage::Limit(limit) => doc! { "$limit": limit },
                 PipelineStage::Sort(doc) => doc! { "$sort": doc },
+            })
+            .collect::<Vec<_>>()
+    }
+    fn create_index_options(options: &[IndexOptions]) -> Vec<IndexModel> {
+        options
+            .iter()
+            .map(|opts| {
+                let index_options = mongodb::options::IndexOptions::builder()
+                    .unique(opts.unique)
+                    .sparse(opts.sparse)
+                    .expire_after(opts.expire_after)
+                    .build();
+                IndexModel::builder()
+                    .keys(opts.fields.to_owned())
+                    .options(index_options)
+                    .build()
             })
             .collect::<Vec<_>>()
     }
@@ -338,11 +354,11 @@ pub trait Model:
         Self::aggregate_raw::<T>(pipeline).await
     }
 
-    async fn create_indexes(indexes: &[IndexModel]) -> Result<CreateIndexesResult, MongooseError> {
-        match Self::collection()
-            .create_indexes(indexes.to_vec(), None)
-            .await
-        {
+    async fn create_indexes(
+        options: &[IndexOptions],
+    ) -> Result<CreateIndexesResult, MongooseError> {
+        let options = Self::create_index_options(options);
+        match Self::collection().create_indexes(options, None).await {
             Ok(result) => Ok(result),
             Err(err) => {
                 tracing::error!(

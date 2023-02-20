@@ -8,7 +8,6 @@ mod mock {
     use serde::{Deserialize, Serialize};
 
     use crate::{
-        async_trait,
         chrono::{DateTime, Utc},
         doc, Model, Timestamp,
     };
@@ -69,7 +68,6 @@ mod mock {
         }
     }
 
-    #[async_trait]
     impl Model for User {}
 
     #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -109,8 +107,32 @@ mod mock {
         }
     }
 
-    #[async_trait]
     impl Model for Post {}
+
+    #[derive(Debug, Deserialize, Serialize, Clone)]
+    pub struct Log {
+        #[serde(rename = "_id")]
+        pub id: String,
+        pub message: String,
+        #[serde(with = "Timestamp")]
+        pub created_at: DateTime<Utc>,
+        #[serde(with = "Timestamp")]
+        pub updated_at: DateTime<Utc>,
+    }
+
+    impl Default for Log {
+        fn default() -> Self {
+            let now = chrono::Utc::now();
+            Self {
+                id: Self::generate_id(),
+                message: String::new(),
+                created_at: now,
+                updated_at: now,
+            }
+        }
+    }
+
+    impl Model for Log {}
 
     pub fn nanoid() -> String {
         use nanoid::nanoid;
@@ -177,6 +199,13 @@ mod mock {
         Post {
             user: user_id,
             content: format!("here's my post: {}", nanoid()),
+            ..Default::default()
+        }
+    }
+
+    pub fn log() -> Log {
+        Log {
+            message: format!("[LOG_MESSAGE]: {}", nanoid()),
             ..Default::default()
         }
     }

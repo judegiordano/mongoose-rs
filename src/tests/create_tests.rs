@@ -1,12 +1,8 @@
 #[cfg(test)]
 mod create {
-    use crate::tests::mock::{self, Post, User};
-    use crate::types::MongooseError;
-    use crate::{
-        doc,
-        mongodb::{options::IndexOptions, IndexModel},
-        Model,
-    };
+    use crate::tests::mock::{self, log, Log, Post, User};
+    use crate::types::{IndexOptions, MongooseError};
+    use crate::{doc, Model};
 
     #[tokio::test]
     async fn create_one() -> Result<(), MongooseError> {
@@ -53,24 +49,47 @@ mod create {
 
     #[tokio::test]
     async fn create_indexes() -> Result<(), MongooseError> {
-        let username_index = IndexModel::builder()
-            .keys(doc! { "username": 1 })
-            .options(IndexOptions::builder().unique(true).build())
-            .build();
-        let slug_index = IndexModel::builder()
-            .keys(doc! { "slug": 1 })
-            .options(IndexOptions::builder().unique(true).build())
-            .build();
-        let email_index = IndexModel::builder()
-            .keys(doc! { "email": 1 })
-            .options(IndexOptions::builder().unique(true).build())
-            .build();
-        let indexes = [username_index, slug_index, email_index];
+        let indexes = [
+            IndexOptions {
+                fields: doc! { "username": 1 },
+                unique: true,
+                ..Default::default()
+            },
+            IndexOptions {
+                fields: doc! { "slug": "text" },
+                sparse: true,
+                ..Default::default()
+            },
+            IndexOptions {
+                fields: doc! { "email": 1, "created_at": -1 },
+                unique: true,
+                ..Default::default()
+            },
+        ];
         let created_names = User::create_indexes(&indexes).await?.index_names;
         let names = User::collection().list_index_names().await.unwrap();
         created_names
             .iter()
             .for_each(|name| assert!(names.contains(name)));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn create_ttl_indexes() -> Result<(), MongooseError> {
+        Log::create_indexes(&[IndexOptions {
+            fields: doc! { "created_at": 1 },
+            expire_after: Some(std::time::Duration::from_millis(1_000)),
+            ..Default::default()
+        }])
+        .await?;
+        let new_log = log().save().await?;
+        let log = Log::read_by_id(&new_log.id).await?;
+        assert!(log.id == new_log.id);
+        // must sleep to allow the mongo engine to drop the TTL document
+        std::thread::sleep(std::time::Duration::from_secs(60));
+        let log = Log::read_by_id(&new_log.id).await;
+        // shuold not be found after TTL expires
+        assert!(log.is_err());
         Ok(())
     }
 }

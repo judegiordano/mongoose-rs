@@ -32,6 +32,24 @@ pub enum PipelineStage {
     AddFields(Document),
 }
 
+pub struct IndexOptions {
+    pub fields: Document,
+    pub unique: bool,
+    pub sparse: bool,
+    pub expire_after: Option<std::time::Duration>,
+}
+
+impl Default for IndexOptions {
+    fn default() -> Self {
+        Self {
+            fields: Document::new(),
+            unique: false,
+            sparse: false,
+            expire_after: None,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Error)]
 pub enum MongooseError {
     #[error("no {0} document found")]
