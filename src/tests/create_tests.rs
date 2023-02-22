@@ -106,7 +106,7 @@ mod create {
         // must sleep to allow the mongo engine to drop the TTL document
         std::thread::sleep(std::time::Duration::from_secs(60));
         let log = Log::read_by_id(&new_log.id).await;
-        // shuold not be found after TTL expires
+        // should not be found after TTL expires
         assert!(log.is_err());
         Ok(())
     }
