@@ -32,22 +32,23 @@ pub enum PipelineStage {
     AddFields(Document),
 }
 
-pub struct IndexOptions {
-    pub fields: Document,
+pub enum IndexDirection {
+    ASC,
+    DESC,
+    TEXT,
+}
+
+pub struct IndexField {
+    pub field: &'static str,
+    pub direction: IndexDirection,
+}
+
+#[derive(Default, Clone, Copy)]
+pub struct Index {
+    pub keys: &'static [IndexField],
     pub unique: bool,
     pub sparse: bool,
     pub expire_after: Option<std::time::Duration>,
-}
-
-impl Default for IndexOptions {
-    fn default() -> Self {
-        Self {
-            fields: Document::new(),
-            unique: false,
-            sparse: false,
-            expire_after: None,
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Error)]
@@ -72,6 +73,6 @@ pub enum MongooseError {
     Count(String),
     #[error("error aggregating {0} documents")]
     Aggregate(String),
-    #[error("error creaeting {0} indexes")]
+    #[error("error creating {0} indexes")]
     CreateIndex(String),
 }

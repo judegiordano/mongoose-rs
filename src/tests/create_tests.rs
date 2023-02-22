@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod create {
     use crate::tests::mock::{self, log, Log, Post, User};
-    use crate::types::{IndexOptions, MongooseError};
-    use crate::{doc, Model};
+    use crate::types::{Index, IndexDirection, IndexField, MongooseError};
+    use crate::Model;
 
     #[tokio::test]
     async fn create_one() -> Result<(), MongooseError> {
@@ -50,18 +50,33 @@ mod create {
     #[tokio::test]
     async fn create_indexes() -> Result<(), MongooseError> {
         let indexes = [
-            IndexOptions {
-                fields: doc! { "username": 1 },
+            Index {
+                keys: &[IndexField {
+                    field: "username",
+                    direction: IndexDirection::ASC,
+                }],
                 unique: true,
                 ..Default::default()
             },
-            IndexOptions {
-                fields: doc! { "slug": "text" },
+            Index {
+                keys: &[IndexField {
+                    field: "slug",
+                    direction: IndexDirection::TEXT,
+                }],
                 sparse: true,
                 ..Default::default()
             },
-            IndexOptions {
-                fields: doc! { "email": 1, "created_at": -1 },
+            Index {
+                keys: &[
+                    IndexField {
+                        field: "email",
+                        direction: IndexDirection::ASC,
+                    },
+                    IndexField {
+                        field: "created_at",
+                        direction: IndexDirection::DESC,
+                    },
+                ],
                 unique: true,
                 ..Default::default()
             },
@@ -76,8 +91,11 @@ mod create {
 
     #[tokio::test]
     async fn create_ttl_indexes() -> Result<(), MongooseError> {
-        Log::create_indexes(&[IndexOptions {
-            fields: doc! { "created_at": 1 },
+        Log::create_indexes(&[Index {
+            keys: &[IndexField {
+                field: "created_at",
+                direction: IndexDirection::ASC,
+            }],
             expire_after: Some(std::time::Duration::from_millis(1_000)),
             ..Default::default()
         }])

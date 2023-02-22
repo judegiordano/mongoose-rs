@@ -7,13 +7,12 @@ use mongodb::{
     results::{CreateIndexesResult, DeleteResult, InsertManyResult, UpdateResult},
     Client, Collection, Database, IndexModel,
 };
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 
 use crate::{
     connection::POOL,
-    types::{IndexOptions, ListOptions, MongooseError, PipelineStage},
+    types::{Index, IndexDirection, ListOptions, MongooseError, PipelineStage},
 };
 
 #[async_trait]
@@ -56,7 +55,7 @@ pub trait Model:
     }
     fn create_pipeline(pipeline: &[PipelineStage]) -> Vec<Document> {
         pipeline
-            .par_iter()
+            .iter()
             .map(|stage| match stage {
                 PipelineStage::Match(doc) => doc! { "$match": doc },
                 PipelineStage::Lookup(doc) => doc! {
@@ -75,18 +74,27 @@ pub trait Model:
             })
             .collect::<Vec<_>>()
     }
-    fn create_index_options(options: &[IndexOptions]) -> Vec<IndexModel> {
+    fn create_index_options(options: &[Index]) -> Vec<IndexModel> {
         options
             .iter()
             .map(|opts| {
-                let index_options = mongodb::options::IndexOptions::builder()
-                    .unique(opts.unique)
-                    .sparse(opts.sparse)
-                    .expire_after(opts.expire_after)
-                    .build();
+                let mut keys = Document::new();
+                opts.keys.iter().for_each(|field| {
+                    match &field.direction {
+                        IndexDirection::ASC => keys.insert(field.field, 1),
+                        IndexDirection::DESC => keys.insert(field.field, -1),
+                        IndexDirection::TEXT => keys.insert(field.field, "text"),
+                    };
+                });
                 IndexModel::builder()
-                    .keys(opts.fields.to_owned())
-                    .options(index_options)
+                    .keys(keys)
+                    .options(
+                        mongodb::options::IndexOptions::builder()
+                            .unique(opts.unique)
+                            .sparse(opts.sparse)
+                            .expire_after(opts.expire_after)
+                            .build(),
+                    )
                     .build()
             })
             .collect::<Vec<_>>()
@@ -354,9 +362,7 @@ pub trait Model:
         Self::aggregate_raw::<T>(pipeline).await
     }
 
-    async fn create_indexes(
-        options: &[IndexOptions],
-    ) -> Result<CreateIndexesResult, MongooseError> {
+    async fn create_indexes(options: &[Index]) -> Result<CreateIndexesResult, MongooseError> {
         let options = Self::create_index_options(options);
         match Self::collection().create_indexes(options, None).await {
             Ok(result) => Ok(result),
