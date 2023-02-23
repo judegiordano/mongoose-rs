@@ -4,30 +4,29 @@ use convert_case::{Case, Casing};
 use futures::StreamExt;
 use mongodb::{
     options::{FindOneAndUpdateOptions, FindOptions, ReturnDocument},
-    results::{DeleteResult, InsertManyResult, UpdateResult},
-    Client, Collection, Database,
+    results::{CreateIndexesResult, DeleteResult, InsertManyResult, UpdateResult},
+    Client, Collection, Database, IndexModel,
 };
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 
 use crate::{
     connection::POOL,
-    types::{ListOptions, MongooseError, PipelineStage},
+    types::{Index, IndexDirection, ListOptions, MongooseError, PipelineStage},
 };
 
 #[async_trait]
 pub trait Model:
     Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + Default + Clone + Debug
 {
-    async fn client() -> &'static Client {
-        &POOL.get().await.client
+    fn client() -> &'static Client {
+        &POOL.client
     }
-    async fn database() -> &'static Database {
-        &POOL.get().await.database
+    fn database() -> &'static Database {
+        &POOL.database
     }
-    async fn collection() -> Collection<Self> {
-        POOL.get().await.database.collection::<Self>(&Self::name())
+    fn collection() -> Collection<Self> {
+        POOL.database.collection::<Self>(&Self::name())
     }
     fn name() -> String {
         let name = std::any::type_name::<Self>();
@@ -56,7 +55,7 @@ pub trait Model:
     }
     fn create_pipeline(pipeline: &[PipelineStage]) -> Vec<Document> {
         pipeline
-            .par_iter()
+            .iter()
             .map(|stage| match stage {
                 PipelineStage::Match(doc) => doc! { "$match": doc },
                 PipelineStage::Lookup(doc) => doc! {
@@ -72,6 +71,31 @@ pub trait Model:
                 PipelineStage::AddFields(doc) => doc! { "$addFields": doc },
                 PipelineStage::Limit(limit) => doc! { "$limit": limit },
                 PipelineStage::Sort(doc) => doc! { "$sort": doc },
+            })
+            .collect::<Vec<_>>()
+    }
+    fn create_index_options(options: &[Index]) -> Vec<IndexModel> {
+        options
+            .iter()
+            .map(|opts| {
+                let mut keys = Document::new();
+                opts.keys.iter().for_each(|field| {
+                    match &field.direction {
+                        IndexDirection::ASC => keys.insert(field.field, 1),
+                        IndexDirection::DESC => keys.insert(field.field, -1),
+                        IndexDirection::TEXT => keys.insert(field.field, "text"),
+                    };
+                });
+                IndexModel::builder()
+                    .keys(keys)
+                    .options(
+                        mongodb::options::IndexOptions::builder()
+                            .unique(opts.unique)
+                            .sparse(opts.sparse)
+                            .expire_after(opts.expire_after)
+                            .build(),
+                    )
+                    .build()
             })
             .collect::<Vec<_>>()
     }
@@ -104,7 +128,7 @@ pub trait Model:
 
     // client api methods
     async fn save(&self) -> Result<Self, MongooseError> {
-        match Self::collection().await.insert_one(self, None).await {
+        match Self::collection().insert_one(self, None).await {
             Ok(_) => Ok(self.clone()),
             Err(err) => {
                 tracing::error!(
@@ -118,7 +142,7 @@ pub trait Model:
     }
 
     async fn bulk_insert(docs: &[Self]) -> Result<InsertManyResult, MongooseError> {
-        match Self::collection().await.insert_many(docs, None).await {
+        match Self::collection().insert_many(docs, None).await {
             Ok(inserted) => Ok(inserted),
             Err(err) => {
                 tracing::error!(
@@ -132,7 +156,7 @@ pub trait Model:
     }
 
     async fn read(filter: Document) -> Result<Self, MongooseError> {
-        match Self::collection().await.find_one(filter, None).await {
+        match Self::collection().find_one(filter, None).await {
             Ok(result) => result.map_or_else(
                 || Err(MongooseError::NotFound(Self::name())),
                 |result| Ok(result),
@@ -174,7 +198,7 @@ pub trait Model:
             }
             None => None,
         };
-        let mut result_cursor = match Self::collection().await.find(filter, opts).await {
+        let mut result_cursor = match Self::collection().find(filter, opts).await {
             Ok(cursor) => cursor,
             Err(err) => {
                 tracing::error!(
@@ -204,7 +228,6 @@ pub trait Model:
 
     async fn update(filter: Document, updates: Document) -> Result<Self, MongooseError> {
         match Self::collection()
-            .await
             .find_one_and_update(
                 filter,
                 Self::normalize_updates(&updates),
@@ -234,7 +257,6 @@ pub trait Model:
         updates: Document,
     ) -> Result<UpdateResult, MongooseError> {
         match Self::collection()
-            .await
             .update_many(filter, Self::normalize_updates(&updates), None)
             .await
         {
@@ -251,7 +273,7 @@ pub trait Model:
     }
 
     async fn delete(filter: Document) -> Result<DeleteResult, MongooseError> {
-        match Self::collection().await.delete_one(filter, None).await {
+        match Self::collection().delete_one(filter, None).await {
             Ok(found) => Ok(found),
             Err(err) => {
                 tracing::error!(
@@ -265,7 +287,7 @@ pub trait Model:
     }
 
     async fn bulk_delete(filter: Document) -> Result<DeleteResult, MongooseError> {
-        match Self::collection().await.delete_many(filter, None).await {
+        match Self::collection().delete_many(filter, None).await {
             Ok(found) => Ok(found),
             Err(err) => {
                 tracing::error!(
@@ -279,7 +301,7 @@ pub trait Model:
     }
 
     async fn count(filter: Option<Document>) -> Result<u64, MongooseError> {
-        match Self::collection().await.count_documents(filter, None).await {
+        match Self::collection().count_documents(filter, None).await {
             Ok(count) => Ok(count),
             Err(err) => {
                 tracing::error!(
@@ -295,7 +317,7 @@ pub trait Model:
     async fn aggregate_raw<T: DeserializeOwned + Send>(
         pipeline: Vec<Document>,
     ) -> Result<Vec<T>, MongooseError> {
-        let mut result_cursor = match Self::collection().await.aggregate(pipeline, None).await {
+        let mut result_cursor = match Self::collection().aggregate(pipeline, None).await {
             Ok(cursor) => cursor,
             Err(err) => {
                 tracing::error!(
@@ -338,5 +360,20 @@ pub trait Model:
     ) -> Result<Vec<T>, MongooseError> {
         let pipeline = Self::create_pipeline(pipeline);
         Self::aggregate_raw::<T>(pipeline).await
+    }
+
+    async fn create_indexes(options: &[Index]) -> Result<CreateIndexesResult, MongooseError> {
+        let options = Self::create_index_options(options);
+        match Self::collection().create_indexes(options, None).await {
+            Ok(result) => Ok(result),
+            Err(err) => {
+                tracing::error!(
+                    "error creating {:?} indexes: {:?}",
+                    Self::name(),
+                    err.to_string()
+                );
+                Err(MongooseError::CreateIndex(Self::name()))
+            }
+        }
     }
 }

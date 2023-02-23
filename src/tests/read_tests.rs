@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod raed {
+mod read {
     use chrono::{DateTime, Utc};
     use serde::{Deserialize, Serialize};
 
@@ -66,7 +66,6 @@ mod raed {
     async fn in_operator() -> Result<(), MongooseError> {
         let users = (0..5).into_iter().map(|_| mock::user()).collect::<Vec<_>>();
         User::bulk_insert(&users).await?;
-
         let users = User::list(
             None,
             Some(ListOptions {
@@ -93,9 +92,14 @@ mod raed {
 
     #[tokio::test]
     async fn count() -> Result<(), MongooseError> {
-        let user = mock::user().save().await?;
-        let count = User::count(Some(doc! { "username": user.username })).await?;
-        assert!(count == 1);
+        let user_one = mock::user().save().await?;
+        let user_two = mock::user().save().await?;
+        let count = User::count(Some(doc! { "$or": [
+            { "username": user_one.username },
+            { "username": user_two.username }
+        ] }))
+        .await?;
+        assert!(count == 2);
         Ok(())
     }
 
