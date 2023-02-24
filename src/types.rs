@@ -32,25 +32,6 @@ pub enum PipelineStage {
     AddFields(Document),
 }
 
-pub enum IndexDirection {
-    ASC,
-    DESC,
-    TEXT,
-}
-
-pub struct IndexField {
-    pub field: &'static str,
-    pub direction: IndexDirection,
-}
-
-#[derive(Default, Clone, Copy)]
-pub struct Index {
-    pub keys: &'static [IndexField],
-    pub unique: bool,
-    pub sparse: bool,
-    pub expire_after: Option<std::time::Duration>,
-}
-
 #[derive(Serialize, Deserialize, Debug, Error)]
 pub enum MongooseError {
     #[error("no {0} document found")]

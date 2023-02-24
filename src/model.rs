@@ -12,12 +12,13 @@ use std::fmt::Debug;
 
 use crate::{
     connection::POOL,
-    types::{Index, IndexDirection, ListOptions, MongooseError, PipelineStage},
+    types::{ListOptions, MongooseError, PipelineStage},
 };
 
 #[async_trait]
-pub trait Model:
-    Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + Default + Clone + Debug
+pub trait Model
+where
+    Self: Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + Default + Clone + Debug,
 {
     fn client() -> &'static Client {
         &POOL.client
@@ -71,31 +72,6 @@ pub trait Model:
                 PipelineStage::AddFields(doc) => doc! { "$addFields": doc },
                 PipelineStage::Limit(limit) => doc! { "$limit": limit },
                 PipelineStage::Sort(doc) => doc! { "$sort": doc },
-            })
-            .collect::<Vec<_>>()
-    }
-    fn create_index_options(options: &[Index]) -> Vec<IndexModel> {
-        options
-            .iter()
-            .map(|opts| {
-                let mut keys = Document::new();
-                opts.keys.iter().for_each(|field| {
-                    match &field.direction {
-                        IndexDirection::ASC => keys.insert(field.field, 1),
-                        IndexDirection::DESC => keys.insert(field.field, -1),
-                        IndexDirection::TEXT => keys.insert(field.field, "text"),
-                    };
-                });
-                IndexModel::builder()
-                    .keys(keys)
-                    .options(
-                        mongodb::options::IndexOptions::builder()
-                            .unique(opts.unique)
-                            .sparse(opts.sparse)
-                            .expire_after(opts.expire_after)
-                            .build(),
-                    )
-                    .build()
             })
             .collect::<Vec<_>>()
     }
@@ -362,9 +338,11 @@ pub trait Model:
         Self::aggregate_raw::<T>(pipeline).await
     }
 
-    async fn create_indexes(options: &[Index]) -> Result<CreateIndexesResult, MongooseError> {
-        let options = Self::create_index_options(options);
-        match Self::collection().create_indexes(options, None).await {
+    async fn create_indexes(options: &[IndexModel]) -> Result<CreateIndexesResult, MongooseError> {
+        match Self::collection()
+            .create_indexes(options.to_vec(), None)
+            .await
+        {
             Ok(result) => Ok(result),
             Err(err) => {
                 tracing::error!(
