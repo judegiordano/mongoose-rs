@@ -1,10 +1,6 @@
-use mimalloc::MiMalloc;
 use mongodb::{options::ClientOptions, Client, Database};
 use once_cell::sync::Lazy;
 use std::sync::Arc;
-
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
 
 pub struct Connection {
     pub database: Database,
