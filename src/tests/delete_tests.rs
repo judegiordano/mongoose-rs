@@ -2,7 +2,7 @@
 mod delete {
     use crate::tests::mock::{self, User};
     use crate::types::MongooseError;
-    use crate::{doc, Model};
+    use crate::{bson::doc, Model};
 
     #[tokio::test]
     async fn delete_one() -> Result<(), MongooseError> {

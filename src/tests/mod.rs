@@ -8,8 +8,8 @@ mod mock {
     use serde::{Deserialize, Serialize};
 
     use crate::{
-        chrono::{DateTime, Utc},
-        doc, Model, Timestamp,
+        bson::{doc, DateTime},
+        Model,
     };
 
     #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -35,17 +35,15 @@ mod mock {
         pub age: u32,
         pub address: Address,
         pub example_array: Vec<u32>,
-        #[serde(with = "Timestamp")]
-        pub created_at: DateTime<Utc>,
-        #[serde(with = "Timestamp")]
-        pub updated_at: DateTime<Utc>,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     impl Default for User {
         fn default() -> Self {
             let now = chrono::Utc::now();
             Self {
-                id: Self::generate_id(),
+                id: Self::generate_nanoid(),
                 username: String::new(),
                 email: String::new(),
                 avatar_hash: String::new(),
@@ -62,8 +60,8 @@ mod mock {
                     apt_number: None,
                 },
                 age: u32::default(),
-                created_at: now,
-                updated_at: now,
+                created_at: now.into(),
+                updated_at: now.into(),
             }
         }
     }
@@ -76,10 +74,8 @@ mod mock {
         pub id: String,
         pub user: String,
         pub content: String,
-        #[serde(with = "Timestamp")]
-        pub created_at: DateTime<Utc>,
-        #[serde(with = "Timestamp")]
-        pub updated_at: DateTime<Utc>,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -88,21 +84,19 @@ mod mock {
         pub id: String,
         pub user: User,
         pub content: String,
-        #[serde(with = "Timestamp")]
-        pub created_at: DateTime<Utc>,
-        #[serde(with = "Timestamp")]
-        pub updated_at: DateTime<Utc>,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     impl Default for Post {
         fn default() -> Self {
             let now = chrono::Utc::now();
             Self {
-                id: Self::generate_id(),
+                id: Self::generate_nanoid(),
                 user: String::new(),
                 content: String::new(),
-                created_at: now,
-                updated_at: now,
+                created_at: now.into(),
+                updated_at: now.into(),
             }
         }
     }
@@ -114,20 +108,18 @@ mod mock {
         #[serde(rename = "_id")]
         pub id: String,
         pub message: String,
-        #[serde(with = "Timestamp")]
-        pub created_at: DateTime<Utc>,
-        #[serde(with = "Timestamp")]
-        pub updated_at: DateTime<Utc>,
+        pub created_at: DateTime,
+        pub updated_at: DateTime,
     }
 
     impl Default for Log {
         fn default() -> Self {
             let now = chrono::Utc::now();
             Self {
-                id: Self::generate_id(),
+                id: Self::generate_nanoid(),
                 message: String::new(),
-                created_at: now,
-                updated_at: now,
+                created_at: now.into(),
+                updated_at: now.into(),
             }
         }
     }

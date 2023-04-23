@@ -2,7 +2,7 @@
 mod update {
     use crate::tests::mock::{self, User};
     use crate::types::MongooseError;
-    use crate::{doc, Model};
+    use crate::{bson::doc, Model};
 
     #[tokio::test]
     async fn increment() -> Result<(), MongooseError> {

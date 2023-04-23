@@ -1,7 +1,6 @@
 // expose 3rd party crates
-pub use async_trait::async_trait;
-pub use bson::{doc, serde_helpers::chrono_datetime_as_bson_datetime as Timestamp, Document};
-pub use chrono;
+pub use bson;
+pub use bson::serde_helpers::chrono_datetime_as_bson_datetime as TimestampSerializer;
 pub use mongodb;
 // expose crates
 pub mod connection;

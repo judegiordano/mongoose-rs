@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod read {
-    use chrono::{DateTime, Utc};
+    use bson::DateTime;
     use serde::{Deserialize, Serialize};
 
     use crate::tests::mock::{self, Address, PopulatedPost, Post, User};
     use crate::types::MongooseError;
     use crate::{
-        doc,
+        bson::doc,
         types::{ListOptions, LookupStage, PipelineStage},
         Model,
     };
@@ -174,12 +174,10 @@ mod read {
 
     #[tokio::test]
     async fn join_to_many() -> Result<(), MongooseError> {
-        use crate::Timestamp;
         #[derive(Debug, Deserialize, Serialize, Clone)]
         struct ShallowPost {
             content: String,
-            #[serde(with = "Timestamp")]
-            created_at: DateTime<Utc>,
+            created_at: DateTime,
         }
         #[derive(Debug, Deserialize, Serialize, Clone)]
         struct UserPosts {
@@ -189,11 +187,9 @@ mod read {
             age: u32,
             address: Address,
             example_array: Vec<u32>,
-            #[serde(with = "Timestamp")]
-            created_at: DateTime<Utc>,
-            #[serde(with = "Timestamp")]
-            updated_at: DateTime<Utc>,
             posts: Vec<ShallowPost>,
+            created_at: DateTime,
+            updated_at: DateTime,
         }
         let user = mock::user().save().await?;
         Post::bulk_insert(
