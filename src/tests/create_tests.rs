@@ -75,6 +75,7 @@ mod create {
         Ok(())
     }
 
+    #[ignore = "run this last, since its so long"]
     #[tokio::test]
     async fn create_ttl_indexes() -> Result<(), MongooseError> {
         let indexes = &[IndexModel::builder()

@@ -39,11 +39,11 @@ jobs:
       - name: add latest nextest
         uses: taiki-e/install-action@nextest
 
-      - name: nextest unit tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: nextest
-          args: run --no-capture --lib
+      - name: unit test
+        run: cargo unit-test
+
+      - name: unit test ignored
+        run: cargo unit-test-ignored
 
       - name: cargo publish
         run: cargo publish

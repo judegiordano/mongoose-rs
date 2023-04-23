@@ -3,7 +3,7 @@ use bson::{doc, Document};
 use convert_case::{Case, Casing};
 use futures::StreamExt;
 use mongodb::{
-    options::{FindOneAndUpdateOptions, FindOptions, ReturnDocument},
+    options::{CreateCollectionOptions, FindOneAndUpdateOptions, FindOptions, ReturnDocument},
     results::{CreateIndexesResult, DeleteResult, InsertManyResult, UpdateResult},
     Client, Collection, Database, IndexModel,
 };
@@ -28,6 +28,29 @@ where
     }
     async fn collection() -> Collection<Self> {
         POOL.get().await.database.collection::<Self>(&Self::name())
+    }
+    async fn create_view(source: &str, pipeline: Vec<Document>) -> bool {
+        let db = Self::database().await;
+        match db
+            .create_collection(
+                Self::name(),
+                CreateCollectionOptions::builder()
+                    .view_on(source.to_string())
+                    .pipeline(pipeline)
+                    .build(),
+            )
+            .await
+        {
+            Ok(_) => true,
+            Err(err) => {
+                tracing::error!(
+                    "error creating {:?} view: {:?}",
+                    Self::name(),
+                    err.to_string()
+                );
+                false
+            }
+        }
     }
     fn name() -> String {
         let name = std::any::type_name::<Self>();
