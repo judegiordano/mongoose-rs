@@ -31,10 +31,10 @@ mod delete {
         })
         .await?;
         let null_addresses = User::list(
-            Some(doc! {
+            doc! {
                 "address.apt_number": None::<String>
-            }),
-            None,
+            },
+            Default::default(),
         )
         .await?;
         assert!(null_addresses.len() == 0);
