@@ -12,7 +12,7 @@ use std::fmt::Debug;
 
 use crate::{
     connection::POOL,
-    types::{ListOptions, MongooseError, PipelineStage},
+    types::{ListOptions, MongooseError},
 };
 
 #[async_trait]
@@ -77,27 +77,6 @@ where
             ]
         )
     }
-    fn create_pipeline(pipeline: &[PipelineStage]) -> Vec<Document> {
-        pipeline
-            .iter()
-            .map(|stage| match stage {
-                PipelineStage::Match(doc) => doc! { "$match": doc },
-                PipelineStage::Lookup(doc) => doc! {
-                    "$lookup": {
-                        "from": doc.from.to_string(),
-                        "localField": doc.local_field.to_string(),
-                        "foreignField": doc.foreign_field.to_string(),
-                        "as": doc.as_field.to_string()
-                    }
-                },
-                PipelineStage::Project(doc) => doc! { "$project": doc },
-                PipelineStage::Unwind(path) => doc! { "$unwind": { "path": path } },
-                PipelineStage::AddFields(doc) => doc! { "$addFields": doc },
-                PipelineStage::Limit(limit) => doc! { "$limit": limit },
-                PipelineStage::Sort(doc) => doc! { "$sort": doc },
-            })
-            .collect::<Vec<_>>()
-    }
     fn normalize_updates(updates: &Document) -> Document {
         let (mut set_updates, mut document_updates) =
             updates
@@ -127,106 +106,61 @@ where
 
     // client api methods
     async fn save(&self) -> Result<Self, MongooseError> {
-        match Self::collection().await.insert_one(self, None).await {
-            Ok(_) => Ok(self.clone()),
-            Err(err) => {
-                tracing::error!(
-                    "error inserting {:?} document: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                Err(MongooseError::Insert(Self::name()))
-            }
-        }
+        Self::collection()
+            .await
+            .insert_one(self, None)
+            .await
+            .map_err(MongooseError::insert_one)?;
+        Ok(self.clone())
     }
 
     async fn bulk_insert(docs: &[Self]) -> Result<InsertManyResult, MongooseError> {
-        match Self::collection().await.insert_many(docs, None).await {
-            Ok(inserted) => Ok(inserted),
-            Err(err) => {
-                tracing::error!(
-                    "error bulk inserting {:?} documents: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                Err(MongooseError::BulkInsert(Self::name()))
-            }
-        }
+        Self::collection()
+            .await
+            .insert_many(docs, None)
+            .await
+            .map_err(MongooseError::bulk_insert)
     }
 
     async fn read(filter: Document) -> Result<Self, MongooseError> {
-        match Self::collection().await.find_one(filter, None).await {
-            Ok(result) => result.map_or_else(
-                || Err(MongooseError::NotFound(Self::name())),
-                |result| Ok(result),
-            ),
-            Err(err) => {
-                tracing::error!(
-                    "error reading {:?} document: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                Err(MongooseError::NotFound(Self::name()))
-            }
-        }
+        Self::collection()
+            .await
+            .find_one(filter, None)
+            .await
+            .map_err(MongooseError::not_found)?
+            .map_or(
+                Err(MongooseError::NotFound(
+                    "no documents returned matching filter".to_string(),
+                )),
+                |doc| Ok(doc),
+            )
     }
 
-    async fn read_by_id(id: &str) -> Result<Self, MongooseError> {
-        Self::read(doc! { "_id": id }).await
+    async fn read_by_id(id: impl ToString + Send) -> Result<Self, MongooseError> {
+        Self::read(doc! { "_id": id.to_string() }).await
     }
 
-    async fn list(
-        filter: Option<Document>,
-        options: Option<ListOptions>,
-    ) -> Result<Vec<Self>, MongooseError> {
-        let opts = match options {
-            Some(opts) => {
-                let limit = if opts.limit.is_some() {
-                    opts.limit
-                } else {
-                    Some(1_000)
-                };
-                Some(
-                    FindOptions::builder()
-                        .skip(opts.skip)
-                        .limit(limit)
-                        .sort(opts.sort)
-                        .projection(None)
-                        .build(),
-                )
-            }
-            None => None,
-        };
-        let mut result_cursor = match Self::collection().await.find(filter, opts).await {
-            Ok(cursor) => cursor,
-            Err(err) => {
-                tracing::error!(
-                    "error listing {:?} documents: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                return Err(MongooseError::List(Self::name()));
-            }
-        };
+    async fn list(filter: Document, options: ListOptions) -> Result<Vec<Self>, MongooseError> {
+        let opts = FindOptions::builder()
+            .skip(options.skip)
+            .limit(options.limit)
+            .sort(options.sort)
+            .projection(None)
+            .build();
+        let mut result_cursor = Self::collection()
+            .await
+            .find(filter, opts)
+            .await
+            .map_err(MongooseError::list)?;
         let mut list_result = vec![];
         while let Some(cursor) = result_cursor.next().await {
-            match cursor {
-                Ok(document) => list_result.push(document),
-                Err(err) => {
-                    tracing::error!(
-                        "error iterating {:?} cursor: {:?}",
-                        Self::name(),
-                        err.to_string()
-                    );
-                    continue;
-                }
-            }
+            list_result.push(cursor.map_err(MongooseError::list)?)
         }
         Ok(list_result)
     }
 
     async fn update(filter: Document, updates: Document) -> Result<Self, MongooseError> {
-        match Self::collection()
+        Self::collection()
             .await
             .find_one_and_update(
                 filter,
@@ -236,148 +170,73 @@ where
                     .build(),
             )
             .await
-        {
-            Ok(updated) => updated.map_or_else(
-                || Err(MongooseError::NotFound(Self::name())),
-                |result| Ok(result),
-            ),
-            Err(err) => {
-                tracing::error!(
-                    "error updating {:?} document: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                Err(MongooseError::Update(Self::name()))
-            }
-        }
+            .map_err(MongooseError::update)?
+            .map_or(
+                Err(MongooseError::NotFound(
+                    "no documents returned matching filter".to_string(),
+                )),
+                |doc| Ok(doc),
+            )
     }
 
     async fn bulk_update(
         filter: Document,
         updates: Document,
     ) -> Result<UpdateResult, MongooseError> {
-        match Self::collection()
+        Self::collection()
             .await
             .update_many(filter, Self::normalize_updates(&updates), None)
             .await
-        {
-            Ok(updates) => Ok(updates),
-            Err(err) => {
-                tracing::error!(
-                    "error updating {:?} documents: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                Err(MongooseError::BulkUpdate(Self::name()))
-            }
-        }
+            .map_err(MongooseError::bulk_update)
     }
 
     async fn delete(filter: Document) -> Result<DeleteResult, MongooseError> {
-        match Self::collection().await.delete_one(filter, None).await {
-            Ok(found) => Ok(found),
-            Err(err) => {
-                tracing::error!(
-                    "error deleting {:?} document: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                Err(MongooseError::Delete(Self::name()))
-            }
-        }
+        Self::collection()
+            .await
+            .delete_one(filter, None)
+            .await
+            .map_err(MongooseError::delete)
     }
 
     async fn bulk_delete(filter: Document) -> Result<DeleteResult, MongooseError> {
-        match Self::collection().await.delete_many(filter, None).await {
-            Ok(found) => Ok(found),
-            Err(err) => {
-                tracing::error!(
-                    "error bulk deleting {:?} documents: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                Err(MongooseError::BulkDelete(Self::name()))
-            }
-        }
+        Self::collection()
+            .await
+            .delete_many(filter, None)
+            .await
+            .map_err(MongooseError::bulk_delete)
     }
 
     async fn count(filter: Option<Document>) -> Result<u64, MongooseError> {
-        match Self::collection().await.count_documents(filter, None).await {
-            Ok(count) => Ok(count),
-            Err(err) => {
-                tracing::error!(
-                    "error counting {:?} documents: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                Err(MongooseError::Count(Self::name()))
-            }
-        }
+        Self::collection()
+            .await
+            .count_documents(filter, None)
+            .await
+            .map_err(MongooseError::count)
     }
 
-    async fn aggregate_raw<T: DeserializeOwned + Send>(
+    async fn aggregate<T: DeserializeOwned + Send>(
         pipeline: Vec<Document>,
     ) -> Result<Vec<T>, MongooseError> {
-        let mut result_cursor = match Self::collection().await.aggregate(pipeline, None).await {
-            Ok(cursor) => cursor,
-            Err(err) => {
-                tracing::error!(
-                    "error creating {:?} aggregate cursor: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                return Err(MongooseError::Aggregate(Self::name()));
-            }
-        };
+        let mut result_cursor = Self::collection()
+            .await
+            .aggregate(pipeline, None)
+            .await
+            .map_err(MongooseError::aggregate)?;
         let mut aggregate_docs = vec![];
         while let Some(cursor) = result_cursor.next().await {
-            match cursor {
-                Ok(document) => match bson::from_document::<T>(document) {
-                    Ok(data) => aggregate_docs.push(data),
-                    Err(err) => {
-                        tracing::error!(
-                            "error converting {:?} bson in aggregation: {:?}",
-                            Self::name(),
-                            err.to_string()
-                        );
-                        return Err(MongooseError::Aggregate(Self::name()));
-                    }
-                },
-                Err(err) => {
-                    tracing::error!(
-                        "error iterating {:?} aggregate cursor: {:?}",
-                        Self::name(),
-                        err.to_string()
-                    );
-                    return Err(MongooseError::Aggregate(Self::name()));
-                }
-            }
+            let document = cursor.map_err(MongooseError::aggregate)?;
+            let data = bson::from_document::<T>(document)
+                .map_err(|err| MongooseError::Aggregate(err.to_string()))?;
+            aggregate_docs.push(data);
         }
         Ok(aggregate_docs)
     }
 
-    async fn aggregate<T: DeserializeOwned + Send>(
-        pipeline: &[PipelineStage],
-    ) -> Result<Vec<T>, MongooseError> {
-        let pipeline = Self::create_pipeline(pipeline);
-        Self::aggregate_raw::<T>(pipeline).await
-    }
-
     async fn create_indexes(options: &[IndexModel]) -> Result<CreateIndexesResult, MongooseError> {
-        match Self::collection()
+        Self::collection()
             .await
             .create_indexes(options.to_vec(), None)
             .await
-        {
-            Ok(result) => Ok(result),
-            Err(err) => {
-                tracing::error!(
-                    "error creating {:?} indexes: {:?}",
-                    Self::name(),
-                    err.to_string()
-                );
-                Err(MongooseError::CreateIndex(Self::name()))
-            }
-        }
+            .map_err(MongooseError::create_index)
     }
 }
