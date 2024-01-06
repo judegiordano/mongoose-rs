@@ -59,6 +59,10 @@ mod create {
                 .options(IndexOptions::builder().unique(true).build())
                 .build(),
             IndexModel::builder()
+                .keys(doc! { "slug": 1 })
+                .options(IndexOptions::builder().unique(true).build())
+                .build(),
+            IndexModel::builder()
                 .keys(doc! { "slug": "text" })
                 .options(IndexOptions::builder().sparse(true).build())
                 .build(),

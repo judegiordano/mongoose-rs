@@ -47,48 +47,48 @@ pub enum MongooseError {
 }
 
 impl MongooseError {
-    pub fn not_found(error: mongodb::error::Error) -> MongooseError {
+    pub fn not_found(error: impl std::error::Error) -> Self {
         tracing::error!("[MONGODB ERROR FINDING DOCUMENTS]: {:?}", error);
-        MongooseError::NotFound(error.to_string())
+        Self::NotFound(error.to_string())
     }
-    pub fn insert_one(error: mongodb::error::Error) -> MongooseError {
+    pub fn insert_one(error: impl std::error::Error) -> Self {
         tracing::error!("[MONGODB ERROR INSERTING DOCUMENT]: {:?}", error);
-        MongooseError::InsertOne(error.to_string())
+        Self::InsertOne(error.to_string())
     }
-    pub fn bulk_insert(error: mongodb::error::Error) -> MongooseError {
+    pub fn bulk_insert(error: impl std::error::Error) -> Self {
         tracing::error!("[MONGODB ERROR BULK INSERTING DOCUMENTS]: {:?}", error);
-        MongooseError::BulkInsert(error.to_string())
+        Self::BulkInsert(error.to_string())
     }
-    pub fn list(error: mongodb::error::Error) -> MongooseError {
+    pub fn list(error: impl std::error::Error) -> Self {
         tracing::error!("[MONGODB ERROR LISTING DOCUMENTS]: {:?}", error);
-        MongooseError::List(error.to_string())
+        Self::List(error.to_string())
     }
-    pub fn update(error: mongodb::error::Error) -> MongooseError {
+    pub fn update(error: impl std::error::Error) -> Self {
         tracing::error!("[MONGODB ERROR UPDATING DOCUMENT]: {:?}", error);
-        MongooseError::Update(error.to_string())
+        Self::Update(error.to_string())
     }
-    pub fn bulk_update(error: mongodb::error::Error) -> MongooseError {
+    pub fn bulk_update(error: impl std::error::Error) -> Self {
         tracing::error!("[MONGODB ERROR BULK UPDATING DOCUMENTS]: {:?}", error);
-        MongooseError::BulkUpdate(error.to_string())
+        Self::BulkUpdate(error.to_string())
     }
-    pub fn delete(error: mongodb::error::Error) -> MongooseError {
+    pub fn delete(error: impl std::error::Error) -> Self {
         tracing::error!("[MONGODB ERROR DELETING DOCUMENT]: {:?}", error);
-        MongooseError::Delete(error.to_string())
+        Self::Delete(error.to_string())
     }
-    pub fn bulk_delete(error: mongodb::error::Error) -> MongooseError {
+    pub fn bulk_delete(error: impl std::error::Error) -> Self {
         tracing::error!("[MONGODB ERROR BULK DELETING DOCUMENTS]: {:?}", error);
-        MongooseError::BulkDelete(error.to_string())
+        Self::BulkDelete(error.to_string())
     }
-    pub fn count(error: mongodb::error::Error) -> MongooseError {
+    pub fn count(error: impl std::error::Error) -> Self {
         tracing::error!("[MONGODB ERROR COUNTING DOCUMENTS]: {:?}", error);
-        MongooseError::Count(error.to_string())
+        Self::Count(error.to_string())
     }
-    pub fn aggregate(error: mongodb::error::Error) -> MongooseError {
+    pub fn aggregate(error: impl std::error::Error) -> Self {
         tracing::error!("[MONGODB ERROR AGGREGATING DOCUMENTS]: {:?}", error);
-        MongooseError::Aggregate(error.to_string())
+        Self::Aggregate(error.to_string())
     }
-    pub fn create_index(error: mongodb::error::Error) -> MongooseError {
+    pub fn create_index(error: impl std::error::Error) -> Self {
         tracing::error!("[MONGODB ERROR CREATING INDEX]: {:?}", error);
-        MongooseError::CreateIndex(error.to_string())
+        Self::CreateIndex(error.to_string())
     }
 }

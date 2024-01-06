@@ -30,8 +30,8 @@ where
         POOL.get().await.database.collection::<Self>(&Self::name())
     }
     async fn create_view(source: &str, pipeline: Vec<Document>) -> bool {
-        let db = Self::database().await;
-        match db
+        match Self::database()
+            .await
             .create_collection(
                 Self::name(),
                 CreateCollectionOptions::builder()
@@ -41,7 +41,7 @@ where
             )
             .await
         {
-            Ok(_) => true,
+            Ok(()) => true,
             Err(err) => {
                 tracing::error!(
                     "error creating {:?} view: {:?}",
@@ -128,12 +128,9 @@ where
             .find_one(filter, None)
             .await
             .map_err(MongooseError::not_found)?
-            .map_or(
-                Err(MongooseError::NotFound(
-                    "no documents returned matching filter".to_string(),
-                )),
-                |doc| Ok(doc),
-            )
+            .ok_or_else(|| {
+                MongooseError::NotFound("no documents returned matching filter".to_string())
+            })
     }
 
     async fn read_by_id(id: impl ToString + Send) -> Result<Self, MongooseError> {
@@ -154,7 +151,7 @@ where
             .map_err(MongooseError::list)?;
         let mut list_result = vec![];
         while let Some(cursor) = result_cursor.next().await {
-            list_result.push(cursor.map_err(MongooseError::list)?)
+            list_result.push(cursor.map_err(MongooseError::list)?);
         }
         Ok(list_result)
     }
@@ -171,12 +168,9 @@ where
             )
             .await
             .map_err(MongooseError::update)?
-            .map_or(
-                Err(MongooseError::NotFound(
-                    "no documents returned matching filter".to_string(),
-                )),
-                |doc| Ok(doc),
-            )
+            .ok_or_else(|| {
+                MongooseError::NotFound("no documents returned matching filter".to_string())
+            })
     }
 
     async fn bulk_update(
