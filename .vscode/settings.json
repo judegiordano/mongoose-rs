@@ -12,5 +12,8 @@
     "unresolved-proc-macro",
     "macro-error"
   ],
-  "debug.allowBreakpointsEverywhere": true
+  "debug.allowBreakpointsEverywhere": true,
+  "rust-analyzer.cargo.features": [
+    "openssl",
+  ]
 }

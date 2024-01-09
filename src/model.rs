@@ -52,6 +52,7 @@ where
             }
         }
     }
+
     fn name() -> String {
         let name = std::any::type_name::<Self>();
         name.split("::").last().map_or_else(
@@ -66,10 +67,9 @@ where
         )
     }
     fn generate_nanoid() -> String {
-        use nanoid::nanoid;
         // ~2 million years needed, in order to have a 1% probability of at least one collision.
         // https://zelark.github.io/nano-id-cc/
-        nanoid!(
+        nanoid::nanoid!(
             20,
             &[
                 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',

@@ -33,6 +33,11 @@ dotenv = "0.15.0"
 async_once = "0.2.6"
 lazy_static = "1.4.0"
 
+[features]
+# Enable openssl-tls in the mongodb library.
+# This is important for needed for connecting to pre-4.2 Atlas instance that's M2 or larger
+openssl = ["mongodb/openssl-tls"]
+
 [dev-dependencies]
 tokio = { version = "1.24.2", features = ["macros"] }
 serde_json = "1.0.91"
