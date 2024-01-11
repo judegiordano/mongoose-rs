@@ -5,7 +5,7 @@ mod read {
 
     use crate::tests::mock::{self, Address, PopulatedPost, Post, User};
     use crate::types::MongooseError;
-    use crate::{bson::doc, types::ListOptions, Model};
+    use crate::{doc, types::ListOptions, Model};
 
     #[tokio::test]
     async fn read() -> Result<(), MongooseError> {

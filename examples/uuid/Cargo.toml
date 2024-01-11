@@ -1,0 +1,15 @@
+[package]
+name = "uuid"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.79"
+dotenv = "0.15.0"
+mongoose = { path = "../../", features = ["uuid", "nanoid"]}
+serde = { version = "1.0.195", features = ["derive"] }
+tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread"] }
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"

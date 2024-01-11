@@ -6,7 +6,7 @@ mod views {
 
     use crate::tests::mock::{Address, Post, User};
     use crate::types::MongooseError;
-    use crate::{bson::doc, Model};
+    use crate::{doc, Model};
 
     #[derive(Debug, Deserialize, Serialize, Clone)]
     struct UserPosts {

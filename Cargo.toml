@@ -10,6 +10,7 @@ readme = "README.md"
 documentation = "https://github.com/judegiordano/mongoose-rs"
 description = "Convenient MongoDb Wrappers"
 publish = true
+rust-version = "1.75"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [profile.release]
@@ -19,24 +20,20 @@ strip = 'symbols' # strip symbols from binary
 lto = true        # enable link time optimization
 
 [dependencies]
-async-trait = "0.1.63"
 bson = { version = "2.5.0", features = ["chrono-0_4"] }
-chrono = "0.4.23"
-futures = "0.3.25"
+convert_case = { version = "0.6.0" }
+futures = { version = "0.3.25" }
 mongodb = { version = "2.3.1", features = ["bson-chrono-0_4"] }
-nanoid = "0.4.0"
+once_cell = { version = "1.19.0" }
 serde = { version = "1.0.152", features = ["derive"] }
-tracing = "0.1.37"
-thiserror = "1.0.38"
-convert_case = "0.6.0"
-dotenv = "0.15.0"
-async_once = "0.2.6"
-lazy_static = "1.4.0"
+thiserror = { version = "1.0.38" }
+tracing = { version = "0.1.37" }
+# optional
+nanoid = { version = "0.4.0", optional = true }
 
 [features]
-# Enable openssl-tls in the mongodb library.
-# This is important for needed for connecting to pre-4.2 Atlas instance that's M2 or larger
-openssl = ["mongodb/openssl-tls"]
+uuid = ["bson/uuid-1"]
+nanoid = ["dep:nanoid"]
 
 [dev-dependencies]
 tokio = { version = "1.24.2", features = ["macros"] }

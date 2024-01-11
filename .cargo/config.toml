@@ -1,5 +1,5 @@
 [alias]
 lint = "clippy -- -W clippy::nursery -W clippy::pedantic -W clippy::unwrap_used -W clippy::expect_used -A clippy::future_not_send -A clippy::must_use_candidate -A clippy::missing_errors_doc -A clippy::unused_async"
 test-verbose = "test --lib -- --test-threads=1 --show-output"
-unit-test = "nextest run --no-capture --lib"
-unit-test-ignored = "nextest run --no-capture --lib --run-ignored ignored-only"
+unit-test = "nextest run --no-capture --lib --all-features"
+unit-test-ignored = "nextest run --no-capture --lib --all-features --run-ignored ignored-only"

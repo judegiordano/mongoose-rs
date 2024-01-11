@@ -1,4 +1,7 @@
-use async_trait::async_trait;
+use crate::{
+    connection::POOL,
+    types::{ListOptions, MongooseError},
+};
 use bson::{doc, Document};
 use convert_case::{Case, Casing};
 use futures::StreamExt;
@@ -8,30 +11,23 @@ use mongodb::{
     Client, Collection, Database, IndexModel,
 };
 use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Debug;
 
-use crate::{
-    connection::POOL,
-    types::{ListOptions, MongooseError},
-};
-
-#[async_trait]
+#[allow(async_fn_in_trait)]
 pub trait Model
 where
-    Self: Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + Default + Clone + Debug,
+    Self: Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + Default + Clone,
 {
-    async fn client() -> &'static Client {
-        &POOL.get().await.client
+    fn client() -> &'static Client {
+        &POOL.client
     }
-    async fn database() -> &'static Database {
-        &POOL.get().await.database
+    fn database() -> &'static Database {
+        &POOL.database
     }
-    async fn collection() -> Collection<Self> {
-        POOL.get().await.database.collection::<Self>(&Self::name())
+    fn collection() -> Collection<Self> {
+        POOL.database.collection::<Self>(&Self::name())
     }
-    async fn create_view(source: &str, pipeline: Vec<Document>) -> bool {
+    async fn create_view(source: impl ToString, pipeline: Vec<Document>) -> bool {
         match Self::database()
-            .await
             .create_collection(
                 Self::name(),
                 CreateCollectionOptions::builder()
@@ -66,6 +62,13 @@ where
             },
         )
     }
+
+    #[cfg(feature = "uuid")]
+    fn generate_uuid() -> bson::Uuid {
+        bson::Uuid::new()
+    }
+
+    #[cfg(feature = "nanoid")]
     fn generate_nanoid() -> String {
         // ~2 million years needed, in order to have a 1% probability of at least one collision.
         // https://zelark.github.io/nano-id-cc/
@@ -77,6 +80,7 @@ where
             ]
         )
     }
+
     fn normalize_updates(updates: &Document) -> Document {
         let (mut set_updates, mut document_updates) =
             updates
@@ -97,7 +101,7 @@ where
                     acc
                 });
         // update timestamp
-        set_updates.insert("updated_at", chrono::Utc::now());
+        set_updates.insert("updated_at", bson::DateTime::now());
         document_updates.insert("$set", set_updates);
         // overall document now looks something like:
         // { $set: { "updated_at": Date, ... }, "$inc": { ... }, "$push": { ... } }
@@ -107,7 +111,6 @@ where
     // client api methods
     async fn save(&self) -> Result<Self, MongooseError> {
         Self::collection()
-            .await
             .insert_one(self, None)
             .await
             .map_err(MongooseError::insert_one)?;
@@ -116,7 +119,6 @@ where
 
     async fn bulk_insert(docs: &[Self]) -> Result<InsertManyResult, MongooseError> {
         Self::collection()
-            .await
             .insert_many(docs, None)
             .await
             .map_err(MongooseError::bulk_insert)
@@ -124,7 +126,6 @@ where
 
     async fn read(filter: Document) -> Result<Self, MongooseError> {
         Self::collection()
-            .await
             .find_one(filter, None)
             .await
             .map_err(MongooseError::not_found)?
@@ -137,6 +138,12 @@ where
         Self::read(doc! { "_id": id.to_string() }).await
     }
 
+    #[cfg(feature = "uuid")]
+    async fn read_by_uuid(id: impl ToString + Send) -> Result<Self, MongooseError> {
+        let id = bson::Uuid::parse_str(id.to_string()).map_err(MongooseError::not_found)?;
+        Self::read(doc! { "_id": id }).await
+    }
+
     async fn list(filter: Document, options: ListOptions) -> Result<Vec<Self>, MongooseError> {
         let opts = FindOptions::builder()
             .skip(options.skip)
@@ -145,7 +152,6 @@ where
             .projection(None)
             .build();
         let mut result_cursor = Self::collection()
-            .await
             .find(filter, opts)
             .await
             .map_err(MongooseError::list)?;
@@ -158,7 +164,6 @@ where
 
     async fn update(filter: Document, updates: Document) -> Result<Self, MongooseError> {
         Self::collection()
-            .await
             .find_one_and_update(
                 filter,
                 Self::normalize_updates(&updates),
@@ -178,7 +183,6 @@ where
         updates: Document,
     ) -> Result<UpdateResult, MongooseError> {
         Self::collection()
-            .await
             .update_many(filter, Self::normalize_updates(&updates), None)
             .await
             .map_err(MongooseError::bulk_update)
@@ -186,7 +190,6 @@ where
 
     async fn delete(filter: Document) -> Result<DeleteResult, MongooseError> {
         Self::collection()
-            .await
             .delete_one(filter, None)
             .await
             .map_err(MongooseError::delete)
@@ -194,7 +197,6 @@ where
 
     async fn bulk_delete(filter: Document) -> Result<DeleteResult, MongooseError> {
         Self::collection()
-            .await
             .delete_many(filter, None)
             .await
             .map_err(MongooseError::bulk_delete)
@@ -202,7 +204,6 @@ where
 
     async fn count(filter: Option<Document>) -> Result<u64, MongooseError> {
         Self::collection()
-            .await
             .count_documents(filter, None)
             .await
             .map_err(MongooseError::count)
@@ -212,7 +213,6 @@ where
         pipeline: Vec<Document>,
     ) -> Result<Vec<T>, MongooseError> {
         let mut result_cursor = Self::collection()
-            .await
             .aggregate(pipeline, None)
             .await
             .map_err(MongooseError::aggregate)?;
@@ -228,7 +228,6 @@ where
 
     async fn create_indexes(options: &[IndexModel]) -> Result<CreateIndexesResult, MongooseError> {
         Self::collection()
-            .await
             .create_indexes(options.to_vec(), None)
             .await
             .map_err(MongooseError::create_index)

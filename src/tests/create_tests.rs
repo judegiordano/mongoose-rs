@@ -1,12 +1,10 @@
 #[cfg(test)]
 mod create {
-    use bson::doc;
     use mongodb::options::IndexOptions;
     use mongodb::IndexModel;
 
     use crate::tests::mock::{self, log, Log, Post, User};
-    use crate::types::MongooseError;
-    use crate::Model;
+    use crate::{doc, types::MongooseError, Model};
 
     #[tokio::test]
     async fn create_one() -> Result<(), MongooseError> {
@@ -72,7 +70,7 @@ mod create {
                 .build(),
         ];
         let created_names = User::create_indexes(indexes).await?.index_names;
-        let names = User::collection().await.list_index_names().await.unwrap();
+        let names = User::collection().list_index_names().await.unwrap();
         created_names
             .iter()
             .for_each(|name| assert!(names.contains(name)));
@@ -92,11 +90,11 @@ mod create {
             .build()];
         Log::create_indexes(indexes).await?;
         let new_log = log().save().await?;
-        let log = Log::read_by_id(&new_log.id).await?;
+        let log = Log::read_by_uuid(&new_log.id).await?;
         assert!(log.id == new_log.id);
         // must sleep to allow the mongo engine to drop the TTL document
         std::thread::sleep(std::time::Duration::from_secs(60));
-        let log = Log::read_by_id(&new_log.id).await;
+        let log = Log::read_by_uuid(&new_log.id).await;
         // should not be found after TTL expires
         assert!(log.is_err());
         Ok(())

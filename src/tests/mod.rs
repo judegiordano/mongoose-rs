@@ -6,12 +6,8 @@ pub mod view_tests;
 
 #[cfg(test)]
 mod mock {
+    use crate::{doc, DateTime, Model, Uuid};
     use serde::{Deserialize, Serialize};
-
-    use crate::{
-        bson::{doc, DateTime},
-        Model,
-    };
 
     #[derive(Debug, Deserialize, Serialize, Clone, Default)]
     pub struct Address {
@@ -42,7 +38,6 @@ mod mock {
 
     impl Default for User {
         fn default() -> Self {
-            let now = chrono::Utc::now();
             Self {
                 id: Self::generate_nanoid(),
                 username: String::new(),
@@ -61,8 +56,8 @@ mod mock {
                     apt_number: None,
                 },
                 age: u32::default(),
-                created_at: now.into(),
-                updated_at: now.into(),
+                created_at: DateTime::now(),
+                updated_at: DateTime::now(),
             }
         }
     }
@@ -91,13 +86,12 @@ mod mock {
 
     impl Default for Post {
         fn default() -> Self {
-            let now = chrono::Utc::now();
             Self {
                 id: Self::generate_nanoid(),
                 user: String::new(),
                 content: String::new(),
-                created_at: now.into(),
-                updated_at: now.into(),
+                created_at: DateTime::now(),
+                updated_at: DateTime::now(),
             }
         }
     }
@@ -107,7 +101,7 @@ mod mock {
     #[derive(Debug, Deserialize, Serialize, Clone)]
     pub struct Log {
         #[serde(rename = "_id")]
-        pub id: String,
+        pub id: Uuid,
         pub message: String,
         pub created_at: DateTime,
         pub updated_at: DateTime,
@@ -115,12 +109,11 @@ mod mock {
 
     impl Default for Log {
         fn default() -> Self {
-            let now = chrono::Utc::now();
             Self {
-                id: Self::generate_nanoid(),
+                id: Uuid::new(),
                 message: String::new(),
-                created_at: now.into(),
-                updated_at: now.into(),
+                created_at: DateTime::now(),
+                updated_at: DateTime::now(),
             }
         }
     }
