@@ -1,12 +1,9 @@
 #[cfg(test)]
 mod views {
-    use bson::DateTime;
-    use mongodb::IndexModel;
-    use serde::{Deserialize, Serialize};
-
     use crate::tests::mock::{Address, Post, User};
     use crate::types::MongooseError;
-    use crate::{doc, Model};
+    use crate::{doc, DateTime, IndexModel, Model};
+    use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Deserialize, Serialize, Clone)]
     struct UserPosts {
@@ -20,6 +17,7 @@ mod views {
         created_at: DateTime,
         updated_at: DateTime,
     }
+
     impl Default for UserPosts {
         fn default() -> Self {
             Self {

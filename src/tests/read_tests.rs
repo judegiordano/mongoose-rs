@@ -1,11 +1,9 @@
 #[cfg(test)]
 mod read {
-    use bson::DateTime;
-    use serde::{Deserialize, Serialize};
-
     use crate::tests::mock::{self, Address, PopulatedPost, Post, User};
     use crate::types::MongooseError;
-    use crate::{doc, types::ListOptions, Model};
+    use crate::{doc, types::ListOptions, DateTime, Model};
+    use serde::{Deserialize, Serialize};
 
     #[tokio::test]
     async fn read() -> Result<(), MongooseError> {

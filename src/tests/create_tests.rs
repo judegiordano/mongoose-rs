@@ -1,10 +1,7 @@
 #[cfg(test)]
 mod create {
-    use mongodb::options::IndexOptions;
-    use mongodb::IndexModel;
-
     use crate::tests::mock::{self, log, Log, Post, User};
-    use crate::{doc, types::MongooseError, Model};
+    use crate::{doc, types::MongooseError, IndexModel, IndexOptions, Model};
 
     #[tokio::test]
     async fn create_one() -> Result<(), MongooseError> {
