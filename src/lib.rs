@@ -1,10 +1,12 @@
 // expose 3rd party crates
-pub use bson::serde_helpers::chrono_datetime_as_bson_datetime as TimestampSerializer;
-pub use bson::{doc, DateTime};
+pub use bson::doc;
 pub use mongodb::{options::IndexOptions, IndexModel};
 
+// feature exports
 #[cfg(feature = "uuid")]
 pub use bson::uuid::Uuid;
+#[cfg(feature = "timestamps")]
+pub use bson::{serde_helpers::chrono_datetime_as_bson_datetime as TimestampSerializer, DateTime};
 
 // expose crates
 pub mod connection;

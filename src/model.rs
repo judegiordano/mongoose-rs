@@ -3,7 +3,6 @@ use crate::{
     types::{ListOptions, MongooseError},
 };
 use bson::{doc, Document};
-use convert_case::{Case, Casing};
 use futures::StreamExt;
 use mongodb::{
     options::{CreateCollectionOptions, FindOneAndUpdateOptions, FindOptions, ReturnDocument},
@@ -50,6 +49,7 @@ where
     }
 
     fn name() -> String {
+        use convert_case::{Case, Casing};
         let name = std::any::type_name::<Self>();
         name.split("::").last().map_or_else(
             || name.to_string(),
@@ -101,6 +101,7 @@ where
                     acc
                 });
         // update timestamp
+        #[cfg(feature = "timestamps")]
         set_updates.insert("updated_at", bson::DateTime::now());
         document_updates.insert("$set", set_updates);
         // overall document now looks something like:

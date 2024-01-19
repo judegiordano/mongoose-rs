@@ -15,6 +15,7 @@
   "debug.allowBreakpointsEverywhere": true,
   "rust-analyzer.cargo.features": [
     "uuid",
-    "nanoid"
+    "nanoid",
+    "timestamps"
   ]
 }

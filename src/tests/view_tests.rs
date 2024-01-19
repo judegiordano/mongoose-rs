@@ -42,14 +42,19 @@ mod views {
         let created_names = Post::create_indexes(indexes).await?.index_names;
         assert!(created_names.len() > 0);
         // create readonly view
-        let pipeline = vec![doc! {
-            "$lookup": {
-                "from": Post::name(),
-                "localField": "_id",
-                "foreignField": "user",
-                "as": Post::name(),
-            }
-        }];
+        let pipeline = vec![
+            doc! {
+                "$lookup": {
+                    "from": Post::name(),
+                    "localField": "_id",
+                    "foreignField": "user",
+                    "as": Post::name(),
+                }
+            },
+            doc! {
+                "$match": { "posts.0": { "$exists": true } }
+            },
+        ];
         // this will error if the view exists, but wont panic
         UserPosts::create_view(&User::name(), pipeline).await;
         Ok(())
