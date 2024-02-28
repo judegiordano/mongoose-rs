@@ -16,17 +16,18 @@ pub trait Model
 where
     Self: Serialize + DeserializeOwned + Unpin + Sync + Sized + Send + Default + Clone,
 {
-    fn client() -> &'static Client {
-        &POOL.client
+    async fn client() -> &'static Client {
+        &POOL.get().await.client
     }
-    fn database() -> &'static Database {
-        &POOL.database
+    async fn database() -> &'static Database {
+        &POOL.get().await.database
     }
-    fn collection() -> Collection<Self> {
-        POOL.database.collection::<Self>(&Self::name())
+    async fn collection() -> Collection<Self> {
+        POOL.get().await.database.collection::<Self>(&Self::name())
     }
     async fn create_view(source: impl ToString, pipeline: Vec<Document>) -> bool {
         match Self::database()
+            .await
             .create_collection(
                 Self::name(),
                 CreateCollectionOptions::builder()
@@ -112,6 +113,7 @@ where
     // client api methods
     async fn save(&self) -> Result<Self, MongooseError> {
         Self::collection()
+            .await
             .insert_one(self, None)
             .await
             .map_err(MongooseError::insert_one)?;
@@ -120,6 +122,7 @@ where
 
     async fn bulk_insert(docs: &[Self]) -> Result<InsertManyResult, MongooseError> {
         Self::collection()
+            .await
             .insert_many(docs, None)
             .await
             .map_err(MongooseError::bulk_insert)
@@ -127,6 +130,7 @@ where
 
     async fn read(filter: Document) -> Result<Self, MongooseError> {
         Self::collection()
+            .await
             .find_one(filter, None)
             .await
             .map_err(MongooseError::not_found)?
@@ -153,6 +157,7 @@ where
             .projection(None)
             .build();
         let mut result_cursor = Self::collection()
+            .await
             .find(filter, opts)
             .await
             .map_err(MongooseError::list)?;
@@ -165,6 +170,7 @@ where
 
     async fn update(filter: Document, updates: Document) -> Result<Self, MongooseError> {
         Self::collection()
+            .await
             .find_one_and_update(
                 filter,
                 Self::normalize_updates(&updates),
@@ -184,6 +190,7 @@ where
         updates: Document,
     ) -> Result<UpdateResult, MongooseError> {
         Self::collection()
+            .await
             .update_many(filter, Self::normalize_updates(&updates), None)
             .await
             .map_err(MongooseError::bulk_update)
@@ -191,6 +198,7 @@ where
 
     async fn delete(filter: Document) -> Result<DeleteResult, MongooseError> {
         Self::collection()
+            .await
             .delete_one(filter, None)
             .await
             .map_err(MongooseError::delete)
@@ -198,6 +206,7 @@ where
 
     async fn bulk_delete(filter: Document) -> Result<DeleteResult, MongooseError> {
         Self::collection()
+            .await
             .delete_many(filter, None)
             .await
             .map_err(MongooseError::bulk_delete)
@@ -205,6 +214,7 @@ where
 
     async fn count(filter: Option<Document>) -> Result<u64, MongooseError> {
         Self::collection()
+            .await
             .count_documents(filter, None)
             .await
             .map_err(MongooseError::count)
@@ -214,6 +224,7 @@ where
         pipeline: Vec<Document>,
     ) -> Result<Vec<T>, MongooseError> {
         let mut result_cursor = Self::collection()
+            .await
             .aggregate(pipeline, None)
             .await
             .map_err(MongooseError::aggregate)?;
@@ -229,6 +240,7 @@ where
 
     async fn create_indexes(options: &[IndexModel]) -> Result<CreateIndexesResult, MongooseError> {
         Self::collection()
+            .await
             .create_indexes(options.to_vec(), None)
             .await
             .map_err(MongooseError::create_index)

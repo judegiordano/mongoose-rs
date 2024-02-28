@@ -67,7 +67,7 @@ mod create {
                 .build(),
         ];
         let created_names = User::create_indexes(indexes).await?.index_names;
-        let names = User::collection().list_index_names().await.unwrap();
+        let names = User::collection().await.list_index_names().await.unwrap();
         created_names
             .iter()
             .for_each(|name| assert!(names.contains(name)));

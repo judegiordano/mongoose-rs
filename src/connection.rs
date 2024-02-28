@@ -1,13 +1,14 @@
+use async_once::AsyncOnce;
+use lazy_static::lazy_static;
 use mongodb::{options::ClientOptions, Client, Database};
-use once_cell::sync::Lazy;
 
 pub struct Connection {
     pub database: Database,
     pub client: Client,
 }
 
-pub static POOL: Lazy<Connection> = Lazy::new(|| {
-    futures::executor::block_on(async {
+lazy_static! {
+    pub static ref POOL: AsyncOnce<Connection> = AsyncOnce::new(async {
         let mongo_uri = std::env::var("MONGO_URI").map_or(
             "mongodb://localhost:27017/mongoose-rs-local".to_string(),
             |uri| uri,
@@ -34,5 +35,5 @@ pub static POOL: Lazy<Connection> = Lazy::new(|| {
             |db| db,
         );
         Connection { database, client }
-    })
-});
+    });
+}
