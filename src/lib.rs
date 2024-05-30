@@ -1,6 +1,6 @@
 // expose 3rd party crates
 pub use bson::doc;
-pub use mongodb::{options::IndexOptions, IndexModel};
+pub use mongodb::{bson::Regex, options::IndexOptions, IndexModel};
 
 // feature exports
 #[cfg(feature = "uuid")]
