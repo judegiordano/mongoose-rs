@@ -220,6 +220,14 @@ where
             .map_err(MongooseError::count)
     }
 
+    async fn estimated_collection_count() -> Result<u64, MongooseError> {
+        Self::collection()
+            .await
+            .estimated_document_count(None)
+            .await
+            .map_err(MongooseError::count)
+    }
+
     async fn aggregate<T: DeserializeOwned + Send>(
         pipeline: Vec<Document>,
     ) -> Result<Vec<T>, MongooseError> {
