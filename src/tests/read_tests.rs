@@ -119,7 +119,7 @@ mod read {
             },
             doc! { "$unwind": { "path": "$user".to_string() } },
         ];
-        let results = Post::aggregate::<PopulatedPost>(pipeline).await?;
+        let results = Post::aggregate::<PopulatedPost>(pipeline, None).await?;
         assert!(results.len() >= 1);
         results
             .iter()
@@ -169,7 +169,7 @@ mod read {
             } },
             doc! { "$sort": { "post_date": -1 } },
         ];
-        let results = Post::aggregate::<serde_json::Value>(pipeline).await?;
+        let results = Post::aggregate::<serde_json::Value>(pipeline, None).await?;
         assert!(results.len() == 2);
         Ok(())
     }
@@ -222,7 +222,7 @@ mod read {
                 }
             } },
         ];
-        let results = User::aggregate::<UserPosts>(pipeline).await?;
+        let results = User::aggregate::<UserPosts>(pipeline, None).await?;
         let populated_user = results.first().unwrap();
         assert!(populated_user.id == user.id);
         assert!(populated_user.posts.len() == 10);
@@ -237,7 +237,7 @@ mod read {
                 "username": &user.username
             }
         }];
-        let found = User::aggregate::<User>(pipeline).await?;
+        let found = User::aggregate::<User>(pipeline, None).await?;
         assert!(found.first().unwrap().username == user.username);
         assert!(found.first().unwrap().id == user.id);
         Ok(())

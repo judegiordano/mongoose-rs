@@ -8,6 +8,7 @@ pub struct ListOptions {
     pub limit: i64,
     pub skip: u64,
     pub sort: Document,
+    pub allow_disk_use: bool,
 }
 
 impl Default for ListOptions {
@@ -16,6 +17,7 @@ impl Default for ListOptions {
             limit: 1_000,
             skip: 0,
             sort: Document::default(),
+            allow_disk_use: false,
         }
     }
 }

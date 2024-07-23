@@ -5,7 +5,10 @@ use crate::{
 use bson::{doc, Document};
 use futures::StreamExt;
 use mongodb::{
-    options::{CreateCollectionOptions, FindOneAndUpdateOptions, FindOptions, ReturnDocument},
+    options::{
+        AggregateOptions, CreateCollectionOptions, FindOneAndUpdateOptions, FindOptions,
+        ReturnDocument,
+    },
     results::{CreateIndexesResult, DeleteResult, InsertManyResult, UpdateResult},
     Client, Collection, Database, IndexModel,
 };
@@ -154,6 +157,7 @@ where
             .skip(options.skip)
             .limit(options.limit)
             .sort(options.sort)
+            .allow_disk_use(options.allow_disk_use)
             .projection(None)
             .build();
         let mut result_cursor = Self::collection()
@@ -230,10 +234,11 @@ where
 
     async fn aggregate<T: DeserializeOwned + Send>(
         pipeline: Vec<Document>,
+        options: impl Into<Option<AggregateOptions>>,
     ) -> Result<Vec<T>, MongooseError> {
         let mut result_cursor = Self::collection()
             .await
-            .aggregate(pipeline, None)
+            .aggregate(pipeline, options)
             .await
             .map_err(MongooseError::aggregate)?;
         let mut aggregate_docs = vec![];
